@@ -20,13 +20,19 @@ This MVP follows the navigation and priorities in `biosync-wireframe-ui-ux.md` a
 | Landing and onboarding (FR-02) | Landing page → four-step SweetAlert flow → Dashboard | Goals, age range, body details, activity level, optional source selection and privacy intro; login/email verification remain backend work (FR-01). |
 | Dashboard and daily metrics (FR-04) | Dashboard | Responsive score, streak, step/calorie/heart cards, activity trend and health snapshot using sample data. |
 | Activity tracking (FR-05) | Activity | Start/finish flow, history filters, activity detail and privacy-first route preview. Recorded demo activities are kept in browser state. |
-| Health trends (FR-06) | Health | Sleep, heart and recovery summaries, selectable trend period, non-diagnostic disclaimer and empty/loading presentation. |
+| Health trends and body goals (FR-06) | Health → Body | BMI, Kemenkes adult reference bands, formula-based body-fat estimate, reference-weight range, waist-to-height ratio, and a user-entered target. Includes limitations and a non-diagnostic disclaimer. |
 | Challenges and badges (FR-07) | Challenges | Carousel, progress, join/leave controls, community cards and achievement badges. |
 | Device sync (FR-03) | Connected devices | Granular consent dialog and local connected-state demo. Real health-provider OAuth/API sync requires provider credentials and secure server endpoints. |
 | Privacy, export, revoke, delete (FR-09) | Privacy center | Permission controls, JSON export, consent toggle, disconnect and local demo-data deletion. |
 | Optional ownership beta (FR-10) | Privacy center | Explains the optional wallet boundary; no wallet or chain transaction is simulated. |
 
 All sample and preference state is stored locally in the browser to make the prototype interactive. It is not a production health-data backend. No diagnosis is provided, and the app does not write health data to a blockchain.
+
+### Body calculator references
+
+- Adult BMI bands use the Indonesian Ministry of Health's SKI 2023 definitions: under 18.5 (wasting), 18.5 to below 25 (normal), 25 to below 27 (overweight), and 27 or higher (obesity): [BKPK Kemenkes](https://www.badankebijakan.kemkes.go.id/daftar-frequently-asked-question-seputar-hasil-utama-ski-2023/hasil-utama-ski-2023/).
+- Reference-weight range uses BMI 18.5 to 24.9 for adults and is shown as a range, not an ideal target.
+- Body-fat percentage is an estimate from the Deurenberg adult equation (BMI, age, and sex), not a direct measurement: [Deurenberg et al., British Journal of Nutrition](https://www.cambridge.org/core/services/aop-cambridge-core/content/view/S0007114591000193). BMI itself does not directly measure body fat or distinguish fat from lean mass: [CDC BMI FAQ](https://www.cdc.gov/bmi/faq/).
 
 ## Deployment
 
