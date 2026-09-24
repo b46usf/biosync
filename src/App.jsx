@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Award, Bell, Bike, CalendarDays,
   Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, Flame, Footprints,
@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import Swal from 'sweetalert2'
 import BodyGoals from './BodyGoals.jsx'
+import { createEncryptedVault, deleteEncryptedVault, hasEncryptedVault, hasLegacyState, readLegacyState, saveEncryptedVault, unlockEncryptedVault } from './secureStore.js'
 
 const ActivityTrendChart = lazy(() => import('./ChartViews.jsx').then((module) => ({ default: module.ActivityTrendChart })))
 const HealthSparkline = lazy(() => import('./ChartViews.jsx').then((module) => ({ default: module.HealthSparkline })))
@@ -38,36 +39,101 @@ const devices = [
   { name: 'Fitbit', detail: 'Aktivitas & tidur', icon: 'f', color: 'fitbit' },
 ]
 
-function readState() {
-  try { return JSON.parse(localStorage.getItem('biosync-demo') || '{}') } catch { return {} }
-}
-function saveState(value) { localStorage.setItem('biosync-demo', JSON.stringify(value)) }
 function initials(name) { return name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() }
+function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]) }
 
 function App() {
   const [page, setPage] = useState('Home')
-  const [onboarded, setOnboarded] = useState(() => readState().onboarded || false)
+  const [onboarded, setOnboarded] = useState(false)
   const [drawer, setDrawer] = useState(false)
   const [range, setRange] = useState('Minggu ini')
   const [activityType, setActivityType] = useState('All')
   const [slide, setSlide] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [activityList, setActivityList] = useState(initialActivities)
-  const [profile, setProfile] = useState({ name: 'Alex Morgan', ...readState().profile })
-  const [body, setBody] = useState(() => {
-    const stored = readState()
-    return stored.body || { height: Number(stored.profile?.height) || 172, weight: Number(stored.profile?.weight) || 68, age: '', sex: '', waist: '', goalWeight: '' }
-  })
-  const [connections, setConnections] = useState(readState().connections || [])
-  const [joined, setJoined] = useState(readState().joined || [])
-  const [consent, setConsent] = useState(readState().consent ?? true)
+  const [activityList, setActivityList] = useState(() => initialActivities.map((item, index) => ({ ...item, id: `sample-${index}` })))
+  const [profile, setProfile] = useState({ name: 'Alex Morgan', goals: ['Stamina', 'Sleep'] })
+  const [body, setBody] = useState({ height: 172, weight: 68, age: '', sex: '', waist: '', goalWeight: '' })
+  const [connections, setConnections] = useState([])
+  const [devicePermissions, setDevicePermissions] = useState({})
+  const [joined, setJoined] = useState([])
+  const [userChallenges, setUserChallenges] = useState([])
+  const [consent, setConsent] = useState(true)
   const [tracking, setTracking] = useState(false)
   const [elapsed, setElapsed] = useState(0)
-  const [onboarding, setOnboarding] = useState(false)
+  const [vaultStatus, setVaultStatus] = useState('checking')
+  const [vaultMode, setVaultMode] = useState('setup')
+  const [vaultError, setVaultError] = useState('')
+  const vaultRef = useRef(null)
+  const vaultEpoch = useRef(0)
+  const saveTimer = useRef(null)
+  const saveQueue = useRef(Promise.resolve())
 
   useEffect(() => { const timer = setTimeout(() => setLoading(false), 850); return () => clearTimeout(timer) }, [])
-  useEffect(() => { if (!onboarded) { localStorage.removeItem('biosync-demo'); return } saveState({ profile, body, connections, joined, consent, onboarded }) }, [profile, body, connections, joined, consent, onboarded])
+  useEffect(() => {
+    try {
+      setVaultMode(hasEncryptedVault() ? 'unlock' : hasLegacyState() ? 'migrate' : 'setup')
+      setVaultStatus(hasEncryptedVault() ? 'locked' : 'access')
+    } catch { setVaultStatus('unavailable') }
+  }, [])
+  useEffect(() => {
+    if (vaultStatus !== 'ready' || !vaultRef.current) return
+    clearTimeout(saveTimer.current)
+    const keys = vaultRef.current
+    const epoch = vaultEpoch.current
+    const snapshot = { profile, body, connections, devicePermissions, joined, userChallenges, consent, onboarded, activities: activityList.map(({ icon, ...activity }) => activity) }
+    saveTimer.current = setTimeout(() => {
+      saveQueue.current = saveQueue.current.then(async () => {
+        if (epoch === vaultEpoch.current && vaultRef.current === keys) await saveEncryptedVault(keys, snapshot)
+      }).catch(() => setVaultError('Penyimpanan terenkripsi gagal. Pastikan ruang penyimpanan browser tersedia.'))
+    }, 180)
+    return () => clearTimeout(saveTimer.current)
+  }, [vaultStatus, profile, body, connections, devicePermissions, joined, userChallenges, consent, onboarded, activityList])
   useEffect(() => { if (!tracking) return; const tick = setInterval(() => setElapsed((n) => n + 1), 1000); return () => clearInterval(tick) }, [tracking])
+
+  const applyVaultData = (data = {}) => {
+    setProfile({ name: 'Alex Morgan', goals: ['Stamina', 'Sleep'], ...(data.profile || {}) })
+    setBody(data.body || { height: Number(data.profile?.height) || 172, weight: Number(data.profile?.weight) || 68, age: '', sex: '', waist: '', goalWeight: '' })
+    setConnections(Array.isArray(data.connections) ? data.connections : [])
+    setDevicePermissions(data.devicePermissions || {})
+    setJoined(Array.isArray(data.joined) ? data.joined : [])
+    setUserChallenges(Array.isArray(data.userChallenges) ? data.userChallenges : [])
+    setConsent(data.consent ?? true)
+    setActivityList(Array.isArray(data.activities) ? data.activities.map((item, index) => ({ ...item, id: item.id || `activity-${index}` })) : initialActivities.map((item, index) => ({ ...item, id: `sample-${index}` })))
+    setOnboarded(Boolean(data.onboarded))
+  }
+  const openVault = async (password) => {
+    setVaultError('')
+    try {
+      let data
+      if (vaultMode === 'unlock') {
+        const result = await unlockEncryptedVault(password)
+        data = result.data
+        vaultRef.current = result.keys
+      } else {
+        data = vaultMode === 'migrate' ? readLegacyState() : {}
+        vaultRef.current = await createEncryptedVault(password, data)
+      }
+      vaultEpoch.current += 1
+      applyVaultData(data)
+      setVaultStatus('ready')
+    } catch (error) {
+      vaultRef.current = null
+      setVaultError(error?.message === 'AUTH' ? 'Kata sandi salah atau data terenkripsi berubah.' : 'Tidak dapat membuka penyimpanan. Coba lagi atau hapus data demo melalui pengaturan browser.')
+    }
+  }
+  const lockVault = async () => {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    await saveQueue.current
+    if (vaultRef.current) {
+      const snapshot = { profile, body, connections, devicePermissions, joined, userChallenges, consent, onboarded, activities: activityList.map(({ icon, ...activity }) => activity) }
+      await saveEncryptedVault(vaultRef.current, snapshot)
+    }
+    vaultEpoch.current += 1
+    vaultRef.current = null
+    setVaultMode('unlock')
+    setVaultStatus('locked')
+    setPage('Home')
+  }
 
   const filteredActivities = useMemo(() => activityType === 'All' ? activityList : activityList.filter((a) => a.type === activityType), [activityList, activityType])
   const showToast = (title, text = '') => Swal.fire({ toast: true, position: 'top-end', icon: 'success', title, text, showConfirmButton: false, timer: 2300, timerProgressBar: true, customClass: { popup: 'biosync-toast' } })
@@ -81,7 +147,7 @@ function App() {
       const result = await ask('Selesaikan aktivitas?', 'Aktivitas ini akan disimpan ke riwayatmu.', 'Simpan aktivitas')
       if (result.isConfirmed) {
         setTracking(false)
-        setActivityList((old) => [{ type: 'Run', title: 'Aktivitas baru', date: 'Baru saja', distance: `${(elapsed / 600).toFixed(2)} km`, time: `${String(Math.floor(elapsed / 60)).padStart(2, '0')}:${String(elapsed % 60).padStart(2, '0')}`, pace: '—', icon: Route, tone: 'mint' }, ...old])
+        setActivityList((old) => [{ id: crypto.randomUUID(), type: 'Run', title: 'Aktivitas baru', date: 'Baru saja', distance: `${(elapsed / 600).toFixed(2)} km`, time: `${String(Math.floor(elapsed / 60)).padStart(2, '0')}:${String(elapsed % 60).padStart(2, '0')}`, pace: '—', icon: Route, tone: 'mint' }, ...old])
         setPage('Activity'); showToast('Aktivitas tersimpan')
       }
     }
@@ -89,17 +155,42 @@ function App() {
   const connectDevice = async (device) => {
     const result = await ask(`Hubungkan ${device.name}?`, 'Kamu dapat mengatur izin kategori data dan mencabut akses kapan saja.', 'Lihat izin')
     if (result.isConfirmed) {
-      const accepted = await Swal.fire({ title: 'Pilih data yang boleh disinkronkan', html: '<div class="consent-options"><label><input type="checkbox" checked> Langkah & aktivitas</label><label><input type="checkbox" checked> Detak jantung</label><label><input type="checkbox"> Tidur & recovery</label></div><p class="modal-note">Data kesehatan tetap privat dan dapat dicabut kapan saja.</p>', showCancelButton: true, confirmButtonText: 'Izinkan & hubungkan', cancelButtonText: 'Batal', customClass: { popup: 'biosync-modal', confirmButton: 'swal-confirm', cancelButton: 'swal-cancel' }, buttonsStyling: false })
-      if (accepted.isConfirmed) { setConnections((old) => [...new Set([...old, device.name])]); showToast(`${device.name} terhubung`) }
+      const accepted = await Swal.fire({ title: 'Pilih data yang boleh disinkronkan', html: '<div class="consent-options"><label><input type="checkbox" value="activity" checked> Langkah & aktivitas</label><label><input type="checkbox" value="heart" checked> Detak jantung</label><label><input type="checkbox" value="sleep"> Tidur & recovery</label></div><p class="modal-note">Data kesehatan tetap privat dan dapat dicabut kapan saja.</p>', showCancelButton: true, confirmButtonText: 'Izinkan & hubungkan', cancelButtonText: 'Batal', customClass: { popup: 'biosync-modal', confirmButton: 'swal-confirm', cancelButton: 'swal-cancel' }, buttonsStyling: false, preConfirm: () => [...Swal.getHtmlContainer().querySelectorAll('input:checked')].map((input) => input.value) })
+      if (accepted.isConfirmed) { setConnections((old) => [...new Set([...old, device.name])]); setDevicePermissions((old) => ({ ...old, [device.name]: accepted.value })); showToast(`${device.name} terhubung`) }
     }
   }
   const exportData = () => {
-    const blob = new Blob([JSON.stringify({ profile, activities: activityList, connections, exportedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' })
+    const blob = new Blob([JSON.stringify({ profile, body, activities: activityList.map(({icon, ...activity})=>activity), connections, devicePermissions, joined, userChallenges, consent, exportedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' })
     const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'biosync-my-data.json'; link.click(); URL.revokeObjectURL(link.href); showToast('Data berhasil diekspor', 'File JSON tersimpan di perangkatmu.')
   }
   const deleteAccount = async () => {
     const result = await ask('Hapus akun demo?', 'Data demo di browser ini akan dihapus. Tindakan tidak dapat dibatalkan.', 'Hapus data')
-    if (result.isConfirmed) { localStorage.removeItem('biosync-demo'); setProfile({ name: 'Alex Morgan' }); setBody({ height: 172, weight: 68, age: '', sex: '', waist: '', goalWeight: '' }); setConnections([]); setJoined([]); setConsent(true); setActivityList(initialActivities); setOnboarded(false); setPage('Home'); showToast('Data demo dihapus') }
+    if (result.isConfirmed) { if (saveTimer.current) clearTimeout(saveTimer.current); vaultEpoch.current += 1; vaultRef.current = null; deleteEncryptedVault(); setVaultMode('setup'); setVaultStatus('access'); setProfile({ name: 'Alex Morgan', goals: ['Stamina', 'Sleep'] }); setBody({ height: 172, weight: 68, age: '', sex: '', waist: '', goalWeight: '' }); setConnections([]); setDevicePermissions({}); setJoined([]); setUserChallenges([]); setConsent(true); setActivityList(initialActivities.map((item,index)=>({...item,id:`sample-${index}`}))); setOnboarded(false); setPage('Home'); showToast('Data demo dihapus') }
+  }
+  const editActivity = async (activity) => {
+    const result = await Swal.fire({
+      title: 'Edit aktivitas',
+      html: `<div class="onboarding-fields"><label>Nama aktivitas<input id="activity-title" value="${escapeHtml(activity.title)}" maxlength="60"></label><label>Jenis<select id="activity-type"><option ${activity.type === 'Run' ? 'selected' : ''}>Run</option><option ${activity.type === 'Walk' ? 'selected' : ''}>Walk</option><option ${activity.type === 'Cycle' ? 'selected' : ''}>Cycle</option><option ${activity.type === 'Gym' ? 'selected' : ''}>Gym</option><option ${activity.type === 'Yoga' ? 'selected' : ''}>Yoga</option></select></label><div><label>Jarak<input id="activity-distance" value="${escapeHtml(activity.distance)}" maxlength="20"></label><label>Durasi<input id="activity-time" value="${escapeHtml(activity.time)}" maxlength="20"></label></div><label>Pace<input id="activity-pace" value="${escapeHtml(activity.pace)}" maxlength="20"></label></div>`,
+      showCancelButton: true, confirmButtonText: 'Simpan', cancelButtonText: 'Batal', customClass: { popup: 'biosync-modal', confirmButton: 'swal-confirm', cancelButton: 'swal-cancel' }, buttonsStyling: false,
+      preConfirm: () => { const title = document.getElementById('activity-title').value.trim(); if (!title) { Swal.showValidationMessage('Nama aktivitas wajib diisi.'); return false } return { title, type: document.getElementById('activity-type').value, distance: document.getElementById('activity-distance').value.trim(), time: document.getElementById('activity-time').value.trim(), pace: document.getElementById('activity-pace').value.trim() } },
+    })
+    if (result.isConfirmed) { setActivityList((current) => current.map((item) => item.id === activity.id ? { ...item, ...result.value } : item)); showToast('Aktivitas diperbarui') }
+  }
+  const deleteActivity = async (activity) => {
+    const result = await ask('Hapus aktivitas ini?', 'Aktivitas akan dihapus dari data demo lokal.', 'Hapus aktivitas')
+    if (result.isConfirmed) { setActivityList((current) => current.filter((item) => item.id !== activity.id)); showToast('Aktivitas dihapus') }
+  }
+  const createChallenge = async () => {
+    const result = await Swal.fire({ title: 'Buat challenge pribadi', html: '<div class="onboarding-fields"><label>Nama challenge<input id="challenge-name" maxlength="60" placeholder="Contoh: Jalan kaki 5 hari"></label><label>Target pribadi<input id="challenge-target" maxlength="40" placeholder="Contoh: 30 km minggu ini"></label></div>', showCancelButton: true, confirmButtonText: 'Buat challenge', cancelButtonText: 'Batal', customClass: { popup: 'biosync-modal', confirmButton: 'swal-confirm', cancelButton: 'swal-cancel' }, buttonsStyling: false, preConfirm: () => { const title = document.getElementById('challenge-name').value.trim(); const goal = document.getElementById('challenge-target').value.trim(); if (!title || !goal) { Swal.showValidationMessage('Nama dan target wajib diisi.'); return false } return { title, goal } } })
+    if (result.isConfirmed) { setUserChallenges((current) => [{ id: crypto.randomUUID(), ...result.value }, ...current]); showToast('Challenge dibuat') }
+  }
+  const editChallenge = async (challenge) => {
+    const result = await Swal.fire({ title: 'Edit challenge', html: `<div class="onboarding-fields"><label>Nama challenge<input id="challenge-name" maxlength="60" value="${escapeHtml(challenge.title)}"></label><label>Target pribadi<input id="challenge-target" maxlength="40" value="${escapeHtml(challenge.goal)}"></label></div>`, showCancelButton: true, confirmButtonText: 'Simpan', cancelButtonText: 'Batal', customClass: { popup: 'biosync-modal', confirmButton: 'swal-confirm', cancelButton: 'swal-cancel' }, buttonsStyling: false, preConfirm: () => { const title = document.getElementById('challenge-name').value.trim(); const goal = document.getElementById('challenge-target').value.trim(); if (!title || !goal) { Swal.showValidationMessage('Nama dan target wajib diisi.'); return false } return { title, goal } } })
+    if (result.isConfirmed) setUserChallenges((current) => current.map((item) => item.id === challenge.id ? { ...item, ...result.value } : item))
+  }
+  const deleteChallenge = async (challenge) => {
+    const result = await ask('Hapus challenge pribadi?', `${challenge.title} akan dihapus dari data demo.`, 'Hapus')
+    if (result.isConfirmed) setUserChallenges((current) => current.filter((item) => item.id !== challenge.id))
   }
   const beginOnboarding = async () => {
     const goals = await Swal.fire({ title: 'What would you like to focus on?', html: '<div class="consent-options goal-options"><label><input type="checkbox" value="Stamina" checked> Build stamina</label><label><input type="checkbox" value="Sleep"> Better sleep</label><label><input type="checkbox" value="Strength"> Get stronger</label><label><input type="checkbox" value="Stress"> Manage stress</label><label><input type="checkbox" value="Weight"> Weight balance</label></div>', showCancelButton: true, confirmButtonText: 'Continue', cancelButtonText: 'Skip for now', customClass: { popup: 'biosync-modal', confirmButton: 'swal-confirm', cancelButton: 'swal-cancel' }, buttonsStyling: false, preConfirm: () => [...document.querySelectorAll('.goal-options input:checked')].map((input) => input.value) })
@@ -112,7 +203,7 @@ function App() {
     if (privacy.isConfirmed || privacy.isDismissed) {
       if (detailsValue.name) setProfile((old) => ({ ...old, name: detailsValue.name, goals: selectedGoals, age: detailsValue.age, height: detailsValue.height, weight: detailsValue.weight, activityLevel: detailsValue.level }))
       setBody((old) => ({ ...old, height: Number(detailsValue.height) || old.height, weight: Number(detailsValue.weight) || old.weight }))
-      if (sourceValue) setConnections((old) => [...new Set([...old, sourceValue])])
+      if (sourceValue) { setConnections((old) => [...new Set([...old, sourceValue])]); setDevicePermissions((old) => ({ ...old, [sourceValue]: ['activity', 'heart'] })) }
       setOnboarded(true); setPage('Home'); showToast('Welcome to BioSync', 'Your demo workspace is ready.')
     }
   }
@@ -120,7 +211,10 @@ function App() {
   const changePage = (name) => { setPage(name); setDrawer(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }
   const duration = `${String(Math.floor(elapsed / 60)).padStart(2, '0')}:${String(elapsed % 60).padStart(2, '0')}`
 
-  if (!onboarded) return <Landing onStart={beginOnboarding} onDemo={() => { setProfile({ name: 'Alex Morgan' }); setOnboarded(true) }} />
+  if (vaultStatus === 'checking') return <div className="vault-checking">Membuka brankas BioSync…</div>
+  if (vaultStatus === 'unavailable') return <div className="vault-checking">Browser ini tidak menyediakan penyimpanan lokal yang diperlukan.</div>
+  if (vaultStatus !== 'ready') return <VaultAccess mode={vaultMode} error={vaultError} onSubmit={openVault} />
+  if (!onboarded) return <Landing onStart={beginOnboarding} onDemo={() => { setOnboarded(true); setPage('Home') }} />
 
   return <div className="app-shell">
     <aside className={`sidebar ${drawer ? 'sidebar-open' : ''}`}>
@@ -132,6 +226,7 @@ function App() {
       <div className="nav-caption tools-caption">PREFERENSI</div>
       <button className={`nav-item ${page === 'Devices' ? 'active' : ''}`} onClick={() => changePage('Devices')}><Watch size={18}/><span>Connected devices</span><span className="device-count">{connections.length}</span></button>
       <button className={`nav-item ${page === 'Privacy' ? 'active' : ''}`} onClick={() => changePage('Privacy')}><LockKeyhole size={18}/><span>Privacy center</span></button>
+      <button className="nav-item vault-lock-nav" onClick={lockVault}><ShieldCheck size={18}/><span>Kunci brankas</span></button>
       <div className="sidebar-spacer"/>
       <div className="sidebar-promo"><div className="promo-spark"><Sparkles size={17}/></div><b>Your data, your rules.</b><p>Atur izin dan jaga privasimu tetap dalam kendali.</p><button onClick={() => changePage('Privacy')}>Kelola privasi <ArrowRight size={14}/></button></div>
       <button className="profile-mini" onClick={() => changePage('Profile')}><div className="avatar">{initials(profile.name)}</div><span><b>{profile.name}</b><small>Personal account</small></span><MoreHorizontal size={18}/></button>
@@ -141,18 +236,54 @@ function App() {
     <main className="main-area">
       <header className="topbar"><button className="icon-button mobile-menu" onClick={() => setDrawer(true)} aria-label="Buka menu"><Menu size={20}/></button><div className="breadcrumb">Workspace <ChevronRight size={14}/> <b>{page === 'Home' ? 'Dashboard' : page}</b></div><div className="top-actions"><button className="help-link" onClick={() => Swal.fire({ title: 'Pusat bantuan BioSync', text: 'Untuk MVP demo, fitur ini belum terhubung ke layanan dukungan.', icon: 'info', confirmButtonText: 'Mengerti', customClass: { popup: 'biosync-modal', confirmButton: 'swal-confirm' }, buttonsStyling: false })}><CircleHelp size={17}/><span>Bantuan</span></button><button className="icon-button notification-button" aria-label="Notifikasi" onClick={() => showToast('Kamu sudah up to date')}><Bell size={18}/><i/></button><div className="top-divider"/><button className="top-user" onClick={() => changePage('Profile')}><div className="avatar avatar-small">{initials(profile.name)}</div><span>{profile.name.split(' ')[0]}</span><ChevronDown size={14}/></button></div></header>
       <div className="page-content">
+        {vaultError && <div className="vault-save-error" role="alert">{vaultError}</div>}
         {page === 'Home' && <Dashboard loading={loading} profile={profile} range={range} setRange={setRange} slide={slide} setSlide={setSlide} startTracking={startTracking} tracking={tracking} duration={duration} changePage={changePage} activities={activityList} joined={joined} joinChallenge={joinChallenge}/>}
-        {page === 'Activity' && <ActivityPage activities={filteredActivities} activityType={activityType} setActivityType={setActivityType} startTracking={startTracking} tracking={tracking} duration={duration}/>}
+        {page === 'Activity' && <ActivityPage activities={filteredActivities} activityType={activityType} setActivityType={setActivityType} startTracking={startTracking} tracking={tracking} duration={duration} editActivity={editActivity} deleteActivity={deleteActivity}/>}
         {page === 'Health' && <HealthPage loading={loading} range={range} setRange={setRange} exportData={exportData} body={body} setBody={setBody}/>}
-        {page === 'Challenges' && <ChallengesPage joined={joined} joinChallenge={joinChallenge}/>}
-        {page === 'Profile' && <ProfilePage profile={profile} setProfile={setProfile} changePage={changePage} exportData={exportData} deleteAccount={deleteAccount}/>}
-        {page === 'Devices' && <DevicesPage connections={connections} connectDevice={connectDevice} setConnections={setConnections} showToast={showToast} changePage={changePage}/>}
-        {page === 'Privacy' && <PrivacyPage consent={consent} setConsent={setConsent} connections={connections} exportData={exportData} deleteAccount={deleteAccount} showToast={showToast}/>}
+        {page === 'Challenges' && <><ChallengesPage joined={joined} joinChallenge={joinChallenge} createChallenge={createChallenge}/><MyChallenges challenges={userChallenges} editChallenge={editChallenge} deleteChallenge={deleteChallenge}/></>}
+        {page === 'Profile' && <ProfilePage profile={profile} setProfile={setProfile} changePage={changePage} exportData={exportData} deleteAccount={deleteAccount} lockVault={lockVault}/>}
+        {page === 'Devices' && <DevicesPage connections={connections} devicePermissions={devicePermissions} setDevicePermissions={setDevicePermissions} connectDevice={connectDevice} setConnections={setConnections} showToast={showToast} changePage={changePage}/>}
+        {page === 'Privacy' && <PrivacyPage consent={consent} setConsent={setConsent} connections={connections} devicePermissions={devicePermissions} setDevicePermissions={setDevicePermissions} setConnections={setConnections} exportData={exportData} deleteAccount={deleteAccount} showToast={showToast}/>}
       </div>
       <footer className="footer"><span>© 2026 BioSync</span><span>Made for a healthier you <span className="footer-heart">♥</span></span><span><ShieldCheck size={13}/> Your data stays yours</span></footer>
     </main>
     <nav className="bottom-nav">{navItems.map(({ label, icon: Icon }) => <button key={label} className={page === label ? 'selected' : ''} onClick={() => changePage(label)}><Icon size={19}/><span>{label}</span></button>)}</nav>
   </div>
+}
+
+function VaultAccess({ mode, error, onSubmit }) {
+  const [password, setPassword] = useState('')
+  const [confirmation, setConfirmation] = useState('')
+  const [busy, setBusy] = useState(false)
+  const setup = mode !== 'unlock'
+  const migrate = mode === 'migrate'
+  const submit = async (event) => {
+    event.preventDefault()
+    if (password.length < 8 || (setup && password !== confirmation)) return
+    setBusy(true)
+    await onSubmit(password)
+    setPassword('')
+    setConfirmation('')
+    setBusy(false)
+  }
+  return <main className="vault-screen">
+    <section className="vault-card">
+      <div className="vault-mark"><ShieldCheck size={24}/></div>
+      <span className="eyebrow">BIOSYNC · DEMO USER</span>
+      <h1>{setup ? 'Buat brankas data' : 'Buka brankas data'}</h1>
+      <p>{migrate ? 'Data demo lama akan dienkripsi di perangkat ini sebelum dibuka.' : setup ? 'Buat kata sandi lokal untuk mengenkripsi data demo di browser ini.' : 'Masukkan kata sandi untuk membuka data terenkripsi di perangkat ini.'}</p>
+      <form onSubmit={submit}>
+        <label>Kata sandi<input type="password" autoComplete={setup ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required autoFocus /></label>
+        {setup && <label>Ulangi kata sandi<input type="password" autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} minLength={8} required /></label>}
+        {error && <div className="vault-error" role="alert">{error}</div>}
+        {setup && password.length > 0 && password.length < 8 && <div className="vault-hint">Gunakan minimal 8 karakter.</div>}
+        {setup && confirmation.length > 0 && password !== confirmation && <div className="vault-hint">Konfirmasi kata sandi belum cocok.</div>}
+        <button className="primary-button vault-submit" disabled={busy || password.length < 8 || (setup && password !== confirmation)}>{busy ? 'Memproses…' : setup ? 'Buat & lanjutkan' : 'Buka BioSync'}</button>
+      </form>
+      <div className="vault-crypto"><LockKeyhole size={14}/><span>Enkripsi AES-256-GCM · autentikasi HMAC-SHA-256</span></div>
+      <small>Kata sandi tidak disimpan. Jika terlupa, data lokal tidak dapat dipulihkan.</small>
+    </section>
+  </main>
 }
 
 function Landing({ onStart, onDemo }) {
@@ -186,10 +317,10 @@ function Dashboard({ loading, profile, range, setRange, slide, setSlide, startTr
 }
 
 function MetricCard({ icon: Icon, name, value, unit, goal, progress, tint, change, down }) { return <div className="metric-card"><div className="metric-top"><div className={`metric-icon ${tint}`}><Icon size={17}/></div><span className={`metric-change ${down ? 'down' : ''}`}>{down ? <ArrowDownRight size={13}/> : <ArrowUpRight size={13}/>} {change}</span></div><div className="metric-label">{name}</div><div className="metric-value">{value}<small>{unit}</small></div><div className="metric-progress"><span className={tint} style={{width:`${progress}%`}}/></div><div className="metric-foot">{goal}</div></div> }
-function ActivityRow({ item }) { const Icon = item.icon || Activity; return <div className="activity-row"><div className={`activity-symbol ${item.tone}`}><Icon size={17}/></div><div className="activity-name"><b>{item.title}</b><span>{item.date}</span></div><div className="activity-distance"><b>{item.distance}</b><span>{item.time}</span></div><div className="activity-pace"><b>{item.pace}</b><span>avg. pace</span></div><button className="row-more" aria-label={`Detail ${item.title}`} onClick={() => Swal.fire({ title: item.title, html: `<div class="activity-detail"><span>${item.distance} <small>Distance</small></span><span>${item.time} <small>Duration</small></span><span>${item.pace} <small>Average pace</small></span></div>`, confirmButtonText: 'Tutup', customClass: { popup: 'biosync-modal', confirmButton: 'swal-confirm' }, buttonsStyling: false })}><MoreHorizontal size={18}/></button></div> }
+function ActivityRow({ item, onEdit, onDelete }) { const Icon = item.icon || Activity; return <div className="activity-row"><div className={`activity-symbol ${item.tone}`}><Icon size={17}/></div><div className="activity-name"><b>{item.title}</b><span>{item.date}</span></div><div className="activity-distance"><b>{item.distance}</b><span>{item.time}</span></div><div className="activity-pace"><b>{item.pace}</b><span>avg. pace</span></div><button className="row-more" aria-label={`Opsi ${item.title}`} onClick={async () => { if (!onEdit || !onDelete) return Swal.fire({ title: item.title, html: `<div class="activity-detail"><span>${escapeHtml(item.distance)} <small>Distance</small></span><span>${escapeHtml(item.time)} <small>Duration</small></span><span>${escapeHtml(item.pace)} <small>Average pace</small></span></div>`, confirmButtonText: 'Tutup', customClass: { popup: 'biosync-modal', confirmButton: 'swal-confirm' }, buttonsStyling: false }); const result = await Swal.fire({ title: item.title, text: `${item.distance} · ${item.time} · ${item.pace}`, icon: 'info', showCancelButton: true, showDenyButton: true, confirmButtonText: 'Edit', denyButtonText: 'Hapus', cancelButtonText: 'Tutup', customClass: { popup: 'biosync-modal', confirmButton: 'swal-confirm', denyButton: 'swal-cancel', cancelButton: 'swal-cancel' }, buttonsStyling: false }); if (result.isConfirmed) onEdit(item); if (result.isDenied) onDelete(item) }}><MoreHorizontal size={18}/></button></div> }
 function DashboardSkeleton() { return <div className="skeleton-dashboard" aria-label="Memuat dashboard"><div className="skeleton skeleton-hero"/><div className="skeleton-row">{[1,2,3].map(n=><div className="skeleton skeleton-metric" key={n}/>)}</div><div className="skeleton-row"><div className="skeleton skeleton-chart"/><div className="skeleton skeleton-snapshot"/></div><div className="skeleton-row"><div className="skeleton skeleton-recent"/><div className="skeleton skeleton-challenge"/></div></div> }
 
-function ActivityPage({ activities, activityType, setActivityType, startTracking, tracking, duration }) { return <><PageHeader eyebrow="MOVE AT YOUR PACE" title="Your activity" subtitle="Small steps. Stronger you." action={<button className={`primary-button ${tracking ? 'recording' : ''}`} onClick={startTracking}>{tracking ? <><span className="record-dot"/> {duration} · Finish</> : <><Plus size={17}/> Start activity</>}</button>}/><div className="activity-summary"><div><span>Total distance</span><b>42.8 <small>km</small></b><small className="summary-up"><ArrowUpRight size={13}/> 12% this month</small></div><div><span>Active time</span><b>6h 24m</b><small>across 18 activities</small></div><div><span>Avg. pace</span><b>6’42” <small>/km</small></b><small>Looking steady</small></div></div><div className="section-title-row"><div><h2>Activity history</h2><p>Your recent movement, all in one place.</p></div><div className="filter-row">{['All','Run','Walk','Cycle','Gym','Yoga'].map((t)=><button className={activityType === t ? 'selected' : ''} key={t} onClick={()=>setActivityType(t)}>{t}</button>)}</div></div><div className="panel history-panel">{activities.length ? activities.map((item,i)=><ActivityRow key={`${item.title}${i}`} item={item}/>) : <EmptyState icon={Activity} title="Belum ada aktivitas" copy="Mulai bergerak dan aktivitasmu akan muncul di sini."/>}</div><div className="map-card"><div className="map-art"><div className="map-road road-one"/><div className="map-road road-two"/><div className="map-road road-three"/><div className="map-route"><span/><i/><b/></div><div className="map-pin"><Route size={15}/></div></div><div className="map-info"><div><span className="eyebrow">RECENT ROUTE</span><h3>Morning loop</h3><p>Route details are kept private by default.</p></div><button className="secondary-button" onClick={()=>Swal.fire({title:'Rute disamarkan',text:'Lokasi presisi tidak ditampilkan pada demo ini.',icon:'info',confirmButtonText:'Oke',customClass:{popup:'biosync-modal',confirmButton:'swal-confirm'},buttonsStyling:false})}>Privacy settings <LockKeyhole size={14}/></button></div></div></> }
+function ActivityPage({ activities, activityType, setActivityType, startTracking, tracking, duration, editActivity, deleteActivity }) { return <><PageHeader eyebrow="MOVE AT YOUR PACE" title="Your activity" subtitle="Small steps. Stronger you." action={<button className={`primary-button ${tracking ? 'recording' : ''}`} onClick={startTracking}>{tracking ? <><span className="record-dot"/> {duration} · Finish</> : <><Plus size={17}/> Start activity</>}</button>}/><div className="activity-summary"><div><span>Total distance</span><b>42.8 <small>km</small></b><small className="summary-up"><ArrowUpRight size={13}/> 12% this month</small></div><div><span>Active time</span><b>6h 24m</b><small>across 18 activities</small></div><div><span>Avg. pace</span><b>6’42” <small>/km</small></b><small>Looking steady</small></div></div><div className="section-title-row"><div><h2>Activity history</h2><p>Your recent movement, all in one place.</p></div><div className="filter-row">{['All','Run','Walk','Cycle','Gym','Yoga'].map((t)=><button className={activityType === t ? 'selected' : ''} key={t} onClick={()=>setActivityType(t)}>{t}</button>)}</div></div><div className="panel history-panel">{activities.length ? activities.map((item,i)=><ActivityRow key={item.id || `${item.title}${i}`} item={item} onEdit={editActivity} onDelete={deleteActivity}/>) : <EmptyState icon={Activity} title="Belum ada aktivitas" copy="Mulai bergerak dan aktivitasmu akan muncul di sini."/>}</div><div className="map-card"><div className="map-art"><div className="map-road road-one"/><div className="map-road road-two"/><div className="map-road road-three"/><div className="map-route"><span/><i/><b/></div><div className="map-pin"><Route size={15}/></div></div><div className="map-info"><div><span className="eyebrow">RECENT ROUTE</span><h3>Morning loop</h3><p>Route details are kept private by default.</p></div><button className="secondary-button" onClick={()=>Swal.fire({title:'Rute disamarkan',text:'Lokasi presisi tidak ditampilkan pada demo ini.',icon:'info',confirmButtonText:'Oke',customClass:{popup:'biosync-modal',confirmButton:'swal-confirm'},buttonsStyling:false})}>Privacy settings <LockKeyhole size={14}/></button></div></div></> }
 
 function HealthPage({ loading, range, setRange, exportData, body, setBody }) {
   const [tab, setTab] = useState('Overview')
@@ -202,13 +333,23 @@ function HealthPage({ loading, range, setRange, exportData, body, setBody }) {
       <div className="health-export panel"><div className="export-icon"><LockKeyhole size={20} /></div><div><b>Data health, under your control.</b><p>Export a copy or review your data permissions at any time.</p></div><button className="secondary-button" onClick={exportData}>Export health data <ArrowRight size={14} /></button></div>
     </>}
   </>
-}function ChallengesPage({ joined, joinChallenge }) { return <><PageHeader eyebrow="MOVE TOGETHER" title="Challenges" subtitle="Make consistency feel like a team sport." action={<button className="secondary-button" onClick={()=>Swal.fire({title:'Buat challenge',text:'Fitur membuat challenge komunitas akan tersedia pada rilis berikutnya.',icon:'info',confirmButtonText:'Mengerti',customClass:{popup:'biosync-modal',confirmButton:'swal-confirm'},buttonsStyling:false})}><Plus size={16}/> Create challenge</button>}/><div className="challenge-banner"><div className="banner-content"><span className="feature-tag"><Sparkles size={12}/> COMMUNITY PICK</span><h2>Better together.</h2><p>Join a community challenge and turn your daily movement into a shared win.</p><button onClick={()=>document.getElementById('challenge-list')?.scrollIntoView({behavior:'smooth'})}>Explore challenges <ArrowRight size={15}/></button></div><div className="banner-orbit"><div className="orbit-ring ring-one"/><div className="orbit-ring ring-two"/><div className="orbit-center"><Footprints size={37}/></div><span className="orbit-person p-one">A</span><span className="orbit-person p-two">M</span><span className="orbit-person p-three">J</span></div></div><div className="challenge-toolbar" id="challenge-list"><div><h2>For you</h2><p>Pick a goal that fits your week.</p></div><div className="challenge-sort">Featured <ChevronDown size={14}/></div></div><div className="challenge-grid">{challenges.map((item,i)=>{const Icon=item.icon; const isJoined=joined.includes(item.title); return <div className={`challenge-card panel challenge-${item.tone}`} key={item.title}><div className="challenge-card-head"><div className={`challenge-card-icon ${item.tone}`}><Icon size={20}/></div><button className="dots-button" aria-label="Opsi challenge" onClick={()=>Swal.fire({title:item.title,text:`${item.people} · ${item.sub}`,icon:'info',confirmButtonText:'Tutup',customClass:{popup:'biosync-modal',confirmButton:'swal-confirm'},buttonsStyling:false})}><MoreHorizontal size={18}/></button></div><span className="challenge-category">{i===0?'DISTANCE':i===1?'WELLNESS':'DAILY GOAL'}</span><h3>{item.title}</h3><p>{item.sub}</p><div className="challenge-card-progress"><div><b>{item.stat}</b><span>{item.progress}%</span></div><div className="metric-progress"><span className={item.tone} style={{width:`${item.progress}%`}}/></div></div><div className="challenge-card-bottom"><span><div className="participant-stack"><i>A</i><i>M</i><i>+</i></div>{item.people}</span><button className={`join-button ${isJoined?'joined':''}`} onClick={()=>joinChallenge(item.title)}>{isJoined?'Joined ✓':'Join challenge'}</button></div></div>})}</div><div className="badge-section"><div className="section-title-row"><div><h2>Your badges</h2><p>Little wins worth celebrating.</p></div><span className="badge-count">3 earned</span></div><div className="badge-row">{[{icon:Footprints,title:'First Move',sub:'Your first activity'},{icon:Flame,title:'7-Day Streak',sub:'Moved for 7 days'},{icon:Target,title:'Goal Getter',sub:'Reached a daily goal'},{icon:Heart,title:'Early Bird',sub:'Locked and loaded'}].map(({icon:Icon,title,sub},i)=><div className={`badge-item ${i===3?'locked':''}`} key={title}><div className="badge-medal"><Icon size={19}/></div><div><b>{title}</b><span>{sub}</span></div>{i===3&&<LockKeyhole size={14}/>}</div>)}</div></div></> }
+}function ChallengesPage({ joined, joinChallenge, createChallenge }) { return <><PageHeader eyebrow="MOVE TOGETHER" title="Challenges" subtitle="Make consistency feel like a team sport." action={<button className="secondary-button" onClick={createChallenge}><Plus size={16}/> Create challenge</button>}/><div className="challenge-banner"><div className="banner-content"><span className="feature-tag"><Sparkles size={12}/> COMMUNITY PICK</span><h2>Better together.</h2><p>Join a community challenge and turn your daily movement into a shared win.</p><button onClick={()=>document.getElementById('challenge-list')?.scrollIntoView({behavior:'smooth'})}>Explore challenges <ArrowRight size={15}/></button></div><div className="banner-orbit"><div className="orbit-ring ring-one"/><div className="orbit-ring ring-two"/><div className="orbit-center"><Footprints size={37}/></div><span className="orbit-person p-one">A</span><span className="orbit-person p-two">M</span><span className="orbit-person p-three">J</span></div></div><div className="challenge-toolbar" id="challenge-list"><div><h2>For you</h2><p>Pick a goal that fits your week.</p></div><div className="challenge-sort">Featured <ChevronDown size={14}/></div></div><div className="challenge-grid">{challenges.map((item,i)=>{const Icon=item.icon; const isJoined=joined.includes(item.title); return <div className={`challenge-card panel challenge-${item.tone}`} key={item.title}><div className="challenge-card-head"><div className={`challenge-card-icon ${item.tone}`}><Icon size={20}/></div><button className="dots-button" aria-label="Opsi challenge" onClick={()=>Swal.fire({title:item.title,text:`${item.people} · ${item.sub}`,icon:'info',confirmButtonText:'Tutup',customClass:{popup:'biosync-modal',confirmButton:'swal-confirm'},buttonsStyling:false})}><MoreHorizontal size={18}/></button></div><span className="challenge-category">{i===0?'DISTANCE':i===1?'WELLNESS':'DAILY GOAL'}</span><h3>{item.title}</h3><p>{item.sub}</p><div className="challenge-card-progress"><div><b>{item.stat}</b><span>{item.progress}%</span></div><div className="metric-progress"><span className={item.tone} style={{width:`${item.progress}%`}}/></div></div><div className="challenge-card-bottom"><span><div className="participant-stack"><i>A</i><i>M</i><i>+</i></div>{item.people}</span><button className={`join-button ${isJoined?'joined':''}`} onClick={()=>joinChallenge(item.title)}>{isJoined?'Joined ✓':'Join challenge'}</button></div></div>})}</div><div className="badge-section"><div className="section-title-row"><div><h2>Your badges</h2><p>Little wins worth celebrating.</p></div><span className="badge-count">3 earned</span></div><div className="badge-row">{[{icon:Footprints,title:'First Move',sub:'Your first activity'},{icon:Flame,title:'7-Day Streak',sub:'Moved for 7 days'},{icon:Target,title:'Goal Getter',sub:'Reached a daily goal'},{icon:Heart,title:'Early Bird',sub:'Locked and loaded'}].map(({icon:Icon,title,sub},i)=><div className={`badge-item ${i===3?'locked':''}`} key={title}><div className="badge-medal"><Icon size={19}/></div><div><b>{title}</b><span>{sub}</span></div>{i===3&&<LockKeyhole size={14}/>}</div>)}</div></div></> }
 
-function DevicesPage({ connections, connectDevice, setConnections, showToast, changePage }) { return <><PageHeader eyebrow="ONE PLACE, YOUR HEALTH" title="Connected devices" subtitle="Choose what you sync. You’re always in control."/><div className="device-status-banner"><div className="sync-status-icon"><Activity size={20}/></div><div><b>{connections.length ? 'Your health data is connected' : 'Connect your health data'}</b><p>{connections.length ? `Last synced just now · ${connections.length} source${connections.length===1?'':'s'} connected` : 'Sync your everyday health stats in one private place.'}</p></div>{connections.length>0&&<button className="secondary-button" onClick={()=>showToast('Data tersinkron', 'Sinkronisasi demo berhasil.')}>Sync now <ArrowRight size={14}/></button>}</div><div className="section-title-row"><div><h2>Available integrations</h2><p>Connect a source to bring your health picture together.</p></div></div><div className="device-list">{devices.map((device)=><div className="device-card panel" key={device.name}><div className={`device-logo ${device.color}`}>{device.icon}</div><div className="device-copy"><b>{device.name}</b><span>{device.detail}</span></div>{connections.includes(device.name)?<><span className="connected-label"><i/> Connected</span><button className="secondary-button" onClick={async()=>{const r=await Swal.fire({title:`Putuskan ${device.name}?`,text:'Data yang sudah tersimpan tetap tersedia.',icon:'warning',showCancelButton:true,confirmButtonText:'Putuskan',cancelButtonText:'Batal',customClass:{popup:'biosync-modal',confirmButton:'swal-confirm danger',cancelButton:'swal-cancel'},buttonsStyling:false});if(r.isConfirmed){setConnections(connections.filter(n=>n!==device.name));showToast('Koneksi diputus')}}}>Disconnect</button></>:<button className="secondary-button connect-button" onClick={()=>connectDevice(device)}>Connect <ArrowRight size={14}/></button>}</div>)}</div><div className="integration-note"><ShieldCheck size={17}/><span><b>Your health data stays private.</b> You choose the categories and can revoke access any time.</span><button onClick={()=>changePage('Privacy')}>Privacy settings <ArrowRight size={13}/></button></div><div className="coming-soon panel"><div><div className="coming-icon"><Watch size={19}/></div><span className="eyebrow">COMING SOON</span><h3>More ways to sync</h3><p>Samsung Health, Garmin and Health Connect integrations are planned for the next release.</p></div><div className="coming-brands"><span>GARMIN</span><span>SAMSUNG<br/>HEALTH</span><span>HEALTH<br/>CONNECT</span></div></div></> }
+function MyChallenges({ challenges, editChallenge, deleteChallenge }) {
+  if (!challenges.length) return null
+  return <section className="panel my-challenges"><div className="section-title-row"><div><h2>Challenge pribadi</h2><p>Data demo yang kamu buat.</p></div></div><div className="my-challenge-list">{challenges.map((item) => <article className="my-challenge-row" key={item.id}><div className="challenge-card-icon teal"><Target size={18}/></div><div className="my-challenge-copy"><b>{item.title}</b><span>Target: {item.goal}</span></div><button className="text-button" onClick={() => editChallenge(item)}>Edit</button><button className="delete-button" onClick={() => deleteChallenge(item)}>Hapus</button></article>)}</div></section>
+}
+function DevicesPage({ connections, devicePermissions, setDevicePermissions, connectDevice, setConnections, showToast, changePage }) { return <><PageHeader eyebrow="ONE PLACE, YOUR HEALTH" title="Connected devices" subtitle="Choose what you sync. You’re always in control."/><div className="device-status-banner"><div className="sync-status-icon"><Activity size={20}/></div><div><b>{connections.length ? 'Your health data is connected' : 'Connect your health data'}</b><p>{connections.length ? `Last synced just now · ${connections.length} source${connections.length===1?'':'s'} connected` : 'Sync your everyday health stats in one private place.'}</p></div>{connections.length>0&&<button className="secondary-button" onClick={()=>showToast('Data tersinkron', 'Sinkronisasi demo berhasil.')}>Sync now <ArrowRight size={14}/></button>}</div><div className="section-title-row"><div><h2>Available integrations</h2><p>Connect a source to bring your health picture together.</p></div></div><div className="device-list">{devices.map((device)=><div className="device-card panel" key={device.name}><div className={`device-logo ${device.color}`}>{device.icon}</div><div className="device-copy"><b>{device.name}</b><span>{device.detail}</span></div>{connections.includes(device.name)?<><span className="connected-label"><i/> Connected</span><button className="secondary-button" onClick={async()=>{const r=await Swal.fire({title:`Putuskan ${device.name}?`,text:'Data yang sudah tersimpan tetap tersedia.',icon:'warning',showCancelButton:true,confirmButtonText:'Putuskan',cancelButtonText:'Batal',customClass:{popup:'biosync-modal',confirmButton:'swal-confirm danger',cancelButton:'swal-cancel'},buttonsStyling:false});if(r.isConfirmed){setConnections((current)=>current.filter(n=>n!==device.name));setDevicePermissions((current)=>{const next={...current};delete next[device.name];return next});showToast('Koneksi diputus')}}}>Disconnect</button></>:<button className="secondary-button connect-button" onClick={()=>connectDevice(device)}>Connect <ArrowRight size={14}/></button>}</div>)}</div><div className="integration-note"><ShieldCheck size={17}/><span><b>Your health data stays private.</b> You choose the categories and can revoke access any time.</span><button onClick={()=>changePage('Privacy')}>Privacy settings <ArrowRight size={13}/></button></div><div className="coming-soon panel"><div><div className="coming-icon"><Watch size={19}/></div><span className="eyebrow">COMING SOON</span><h3>More ways to sync</h3><p>Samsung Health, Garmin and Health Connect integrations are planned for the next release.</p></div><div className="coming-brands"><span>GARMIN</span><span>SAMSUNG<br/>HEALTH</span><span>HEALTH<br/>CONNECT</span></div></div></> }
 
-function PrivacyPage({ consent, setConsent, connections, exportData, deleteAccount, showToast }) { return <><PageHeader eyebrow="YOUR DATA, YOUR RULES" title="Privacy center" subtitle="Transparency and control, built into every step." action={<div className="privacy-safe"><ShieldCheck size={15}/> Privacy protected</div>}/><div className="privacy-hero"><div className="privacy-lock"><ShieldCheck size={26}/></div><div><span className="eyebrow">PRIVACY OVERVIEW</span><h2>You’re in control, always.</h2><p>We only use the data you choose to share. Your health details stay private and are never sold.</p></div><div className="privacy-orbit"><LockKeyhole size={36}/></div></div><div className="privacy-grid"><div className="panel privacy-card"><div className="panel-heading"><div><h2>Your data</h2><p>What’s currently stored in this demo.</p></div><div className="metric-icon teal"><LockKeyhole size={17}/></div></div><div className="data-row"><span>Profile & goals</span><span className="data-stored"><i/> Stored locally</span></div><div className="data-row"><span>Activity history</span><span className="data-stored"><i/> {connections.length?'Synced':'Demo data'}</span></div><div className="data-row"><span>Connected sources</span><b>{connections.length} connected</b></div><div className="data-row"><span>Wallet / blockchain</span><span className="optional-label">Optional · not connected</span></div><button className="secondary-button full-width" onClick={exportData}>Download my data <ArrowRight size={14}/></button></div><div className="panel privacy-card"><div className="panel-heading"><div><h2>Data permissions</h2><p>Choose what your connected apps can access.</p></div><div className="metric-icon purple"><Settings2 size={17}/></div></div>{connections.length ? <div className="permission-apps">{connections.map(name=><div className="permission-app" key={name}><div className="permission-avatar">{name[0]}</div><div><b>{name}</b><span>Steps, activity · Until revoked</span></div><button className="toggle-switch on" aria-label={`Cabut izin ${name}`} onClick={()=>showToast('Izin bisa diatur di Connected devices')}/></div>)}</div>:<div className="permission-empty"><LockKeyhole size={20}/><span>Belum ada aplikasi yang memiliki akses.</span></div>}<div className="consent-row"><div><b>Product improvement</b><span>Share anonymous usage insights</span></div><button className={`toggle-switch ${consent?'on':''}`} aria-label="Ubah izin penggunaan data" onClick={()=>{setConsent(!consent);showToast(consent?'Consent dicabut':'Consent diperbarui')}}/></div></div></div><div className="privacy-action-row"><div className="privacy-action"><div className="action-symbol export"><ArrowDownRight size={18}/></div><div><b>Download your data</b><span>Get a portable copy in JSON format.</span></div><button className="secondary-button" onClick={exportData}>Export data <ArrowRight size={14}/></button></div><div className="privacy-action delete-action"><div className="action-symbol delete"><X size={18}/></div><div><b>Delete your account</b><span>Permanently remove your local demo data.</span></div><button className="delete-button" onClick={deleteAccount}>Delete account</button></div></div><div className="blockchain-note"><div className="blockchain-icon"><Shield size={18}/></div><span><b>Web3 ownership · Beta</b><small>Wallet connection is optional. Health details are never written to a public blockchain.</small></span><span className="beta-pill">BETA</span><button onClick={()=>showToast('Web3 beta','Wallet connect is planned for a later phase.')}>Learn more <ArrowRight size={13}/></button></div></> }
+function PrivacyPage({ consent, setConsent, connections, devicePermissions, setDevicePermissions, setConnections, exportData, deleteAccount, showToast }) { return <><PageHeader eyebrow="YOUR DATA, YOUR RULES" title="Privacy center" subtitle="Transparency and control, built into every step." action={<div className="privacy-safe"><ShieldCheck size={15}/> Privacy protected</div>}/><div className="privacy-hero"><div className="privacy-lock"><ShieldCheck size={26}/></div><div><span className="eyebrow">PRIVACY OVERVIEW</span><h2>You’re in control, always.</h2><p>We only use the data you choose to share. Your health details stay private and are never sold.</p></div><div className="privacy-orbit"><LockKeyhole size={36}/></div></div><div className="privacy-grid"><div className="panel privacy-card"><div className="panel-heading"><div><h2>Your data</h2><p>What’s currently stored in this demo.</p></div><div className="metric-icon teal"><LockKeyhole size={17}/></div></div><div className="data-row"><span>Profile & goals</span><span className="data-stored"><i/> Terenkripsi lokal</span></div><div className="data-row"><span>Activity history</span><span className="data-stored"><i/> {'Terenkripsi lokal'}</span></div><div className="data-row"><span>Connected sources</span><b>{connections.length} connected</b></div><div className="data-row"><span>Wallet / blockchain</span><span className="optional-label">Optional · not connected</span></div><button className="secondary-button full-width" onClick={exportData}>Download my data <ArrowRight size={14}/></button></div><div className="panel privacy-card"><div className="panel-heading"><div><h2>Data permissions</h2><p>Choose what your connected apps can access.</p></div><div className="metric-icon purple"><Settings2 size={17}/></div></div>{connections.length ? <div className="permission-apps">{connections.map(name=><div className="permission-app" key={name}><div className="permission-avatar">{name[0]}</div><div><b>{name}</b><span>{(devicePermissions[name] || []).map((key)=>({activity:"Langkah & aktivitas",heart:"Detak jantung",sleep:"Tidur & recovery"}[key])).filter(Boolean).join(", ") || "Tidak ada kategori diizinkan"} · Sampai dicabut</span></div><button className="toggle-switch on" aria-label={`Cabut izin ${name}`} onClick={()=>{setConnections((current)=>current.filter((entry)=>entry!==name));setDevicePermissions((current)=>{const next={...current};delete next[name];return next})}}/></div>)}</div>:<div className="permission-empty"><LockKeyhole size={20}/><span>Belum ada aplikasi yang memiliki akses.</span></div>}<div className="consent-row"><div><b>Product improvement</b><span>Share anonymous usage insights</span></div><button className={`toggle-switch ${consent?'on':''}`} aria-label="Ubah izin penggunaan data" onClick={()=>{setConsent(!consent);showToast(consent?'Consent dicabut':'Consent diperbarui')}}/></div></div></div><div className="privacy-action-row"><div className="privacy-action"><div className="action-symbol export"><ArrowDownRight size={18}/></div><div><b>Download your data</b><span>Get a portable copy in JSON format.</span></div><button className="secondary-button" onClick={exportData}>Export data <ArrowRight size={14}/></button></div><div className="privacy-action delete-action"><div className="action-symbol delete"><X size={18}/></div><div><b>Delete your account</b><span>Permanently remove your local demo data.</span></div><button className="delete-button" onClick={deleteAccount}>Delete account</button></div></div><div className="blockchain-note"><div className="blockchain-icon"><Shield size={18}/></div><span><b>Web3 ownership · Beta</b><small>Wallet connection is optional. Health details are never written to a public blockchain.</small></span><span className="beta-pill">BETA</span><button onClick={()=>showToast('Web3 beta','Wallet connect is planned for a later phase.')}>Learn more <ArrowRight size={13}/></button></div></> }
 
-function ProfilePage({ profile, setProfile, changePage, exportData, deleteAccount }) { const [name,setName]=useState(profile.name); const [saved,setSaved]=useState(false); return <><PageHeader eyebrow="YOUR ACCOUNT" title="Profile & settings" subtitle="A little about you, on your terms."/><div className="profile-layout"><div className="panel profile-card"><div className="profile-cover"><div className="profile-avatar-large">{initials(profile.name)}</div></div><div className="profile-summary"><h2>{profile.name}</h2><span>Personal account · Member since Sep 2026</span><div className="profile-stats"><div><b>12</b><small>Activities</small></div><div><b>7 days</b><small>Best streak</small></div><div><b>3</b><small>Badges</small></div></div></div></div><div className="panel settings-card"><div className="panel-heading"><div><h2>Personal information</h2><p>Update your profile details.</p></div></div><label className="form-label">Display name<input value={name} onChange={e=>setName(e.target.value)} placeholder="Your name"/></label><label className="form-label">Email address<input value="alex.morgan@example.com" readOnly/><small>Email changes aren’t available in this demo.</small></label><div className="settings-divider"/><div className="settings-row"><div><b>Health goals</b><span>Improve stamina · Better sleep</span></div><button className="text-button" onClick={()=>Swal.fire({title:'Health goals',text:'Stamina, weight, sleep, strength, and stress goals can be configured during onboarding.',icon:'info',confirmButtonText:'Oke',customClass:{popup:'biosync-modal',confirmButton:'swal-confirm'},buttonsStyling:false})}>Edit <ArrowRight size={13}/></button></div><div className="settings-row"><div><b>Connected devices</b><span>Manage health data sources</span></div><button className="text-button" onClick={()=>changePage('Devices')}>Manage <ArrowRight size={13}/></button></div><div className="settings-row"><div><b>Privacy & permissions</b><span>Review what you’re sharing</span></div><button className="text-button" onClick={()=>changePage('Privacy')}>Review <ArrowRight size={13}/></button></div><div className="settings-actions"><button className="secondary-button" onClick={exportData}>Export my data <ArrowDownRight size={14}/></button><button className="primary-button" onClick={()=>{setProfile({...profile,name:name||profile.name});setSaved(true);setTimeout(()=>setSaved(false),2200)}}>{saved?<><Check size={15}/> Saved</>:'Save changes'}</button></div></div></div><div className="logout-row"><span><LogOut size={16}/> Want to remove your data?</span><button className="delete-button" onClick={deleteAccount}>Delete account</button></div></> }
+async function editHealthGoals(profile, setProfile) {
+  const options = ['Stamina', 'Sleep', 'Strength', 'Stress', 'Weight']
+  const result = await Swal.fire({ title: 'Health goals', html: `<div class="consent-options goal-options">${options.map((goal) => `<label><input type="checkbox" value="${goal}" ${profile.goals?.includes(goal) ? 'checked' : ''}> ${goal}</label>`).join('')}</div>`, showCancelButton: true, confirmButtonText: 'Simpan', cancelButtonText: 'Batal', customClass: { popup: 'biosync-modal', confirmButton: 'swal-confirm', cancelButton: 'swal-cancel' }, buttonsStyling: false, preConfirm: () => [...document.querySelectorAll('.goal-options input:checked')].map((input) => input.value) })
+  if (result.isConfirmed) setProfile((current) => ({ ...current, goals: result.value }))
+}
+
+function ProfilePage({ profile, setProfile, changePage, exportData, deleteAccount }) { const [name,setName]=useState(profile.name); const [saved,setSaved]=useState(false); return <><PageHeader eyebrow="YOUR ACCOUNT" title="Profile & settings" subtitle="A little about you, on your terms."/><div className="profile-layout"><div className="panel profile-card"><div className="profile-cover"><div className="profile-avatar-large">{initials(profile.name)}</div></div><div className="profile-summary"><h2>{profile.name}</h2><span>Personal account · Member since Sep 2026</span><div className="profile-stats"><div><b>12</b><small>Activities</small></div><div><b>7 days</b><small>Best streak</small></div><div><b>3</b><small>Badges</small></div></div></div></div><div className="panel settings-card"><div className="panel-heading"><div><h2>Personal information</h2><p>Update your profile details.</p></div></div><label className="form-label">Display name<input value={name} onChange={e=>setName(e.target.value)} placeholder="Your name"/></label><label className="form-label">Email address<input value="alex.morgan@example.com" readOnly/><small>Email changes aren’t available in this demo.</small></label><div className="settings-divider"/><div className="settings-row"><div><b>Health goals</b><span>{profile.goals?.join(' · ') || 'Belum ada target'}</span></div><button className="text-button" onClick={()=>editHealthGoals(profile,setProfile)}>Edit <ArrowRight size={13}/></button></div><div className="settings-row"><div><b>Connected devices</b><span>Manage health data sources</span></div><button className="text-button" onClick={()=>changePage('Devices')}>Manage <ArrowRight size={13}/></button></div><div className="settings-row"><div><b>Privacy & permissions</b><span>Review what you’re sharing</span></div><button className="text-button" onClick={()=>changePage('Privacy')}>Review <ArrowRight size={13}/></button></div><div className="settings-actions"><button className="secondary-button" onClick={exportData}>Export my data <ArrowDownRight size={14}/></button><button className="primary-button" onClick={()=>{setProfile({...profile,name:name||profile.name});setSaved(true);setTimeout(()=>setSaved(false),2200)}}>{saved?<><Check size={15}/> Saved</>:'Save changes'}</button></div></div></div><div className="logout-row"><span><LogOut size={16}/> Want to remove your data?</span><button className="delete-button" onClick={deleteAccount}>Delete account</button></div></> }
 
 function PageHeader({ eyebrow, title, subtitle, action }) { return <div className="page-header"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{subtitle}</p></div>{action&&<div className="page-header-action">{action}</div>}</div> }
 function EmptyState({ icon: Icon, title, copy }) { return <div className="empty-state"><div><Icon size={22}/></div><b>{title}</b><span>{copy}</span></div> }

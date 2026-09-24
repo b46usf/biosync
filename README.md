@@ -13,20 +13,26 @@ Create a production build with `npm run build`. Vercel detects Vite automaticall
 
 ## Wireframe and SRS alignment
 
-This MVP follows the navigation and priorities in `biosync-wireframe-ui-ux.md` and `biosync-srs-mvp.md`:
+This MVP follows the navigation and priorities in [`docs/biosync-wireframe-ui-ux.md`](docs/biosync-wireframe-ui-ux.md) and [`docs/biosync-srs-mvp.md`](docs/biosync-srs-mvp.md):
 
 | Wireframe / SRS capability | App surface | Current MVP behavior |
 |---|---|---|
 | Landing and onboarding (FR-02) | Landing page → four-step SweetAlert flow → Dashboard | Goals, age range, body details, activity level, optional source selection and privacy intro; login/email verification remain backend work (FR-01). |
 | Dashboard and daily metrics (FR-04) | Dashboard | Responsive score, streak, step/calorie/heart cards, activity trend and health snapshot using sample data. |
-| Activity tracking (FR-05) | Activity | Start/finish flow, history filters, activity detail and privacy-first route preview. Recorded demo activities are kept in browser state. |
+| Activity tracking (FR-05) | Activity | Create activities with the start/finish flow, read/filter history, edit activity details, and delete entries. |
 | Health trends and body goals (FR-06) | Health → Body | BMI, Kemenkes adult reference bands, formula-based body-fat estimate, reference-weight range, waist-to-height ratio, and a user-entered target. Includes limitations and a non-diagnostic disclaimer. |
-| Challenges and badges (FR-07) | Challenges | Carousel, progress, join/leave controls, community cards and achievement badges. |
+| Challenges and badges (FR-07) | Challenges | Carousel, join/leave community challenges, create/edit/delete personal challenges and view demo badges. |
 | Device sync (FR-03) | Connected devices | Granular consent dialog and local connected-state demo. Real health-provider OAuth/API sync requires provider credentials and secure server endpoints. |
 | Privacy, export, revoke, delete (FR-09) | Privacy center | Permission controls, JSON export, consent toggle, disconnect and local demo-data deletion. |
 | Optional ownership beta (FR-10) | Privacy center | Explains the optional wallet boundary; no wallet or chain transaction is simulated. |
 
-All sample and preference state is stored locally in the browser to make the prototype interactive. It is not a production health-data backend. No diagnosis is provided, and the app does not write health data to a blockchain.
+### Local demo security
+
+- The first visit asks the demo user to create a local passphrase. Existing plaintext demo data is encrypted during this setup; returning users unlock the vault with that passphrase.
+- Profile, body goals, activities, challenge membership, personal challenges, device selections and permissions, and consent are encrypted in localStorage with AES-256-GCM. A separate HMAC-SHA-256 authenticates the stored envelope. PBKDF2 with SHA-256 and a random per-vault salt derives the keys; keys and passphrase stay in memory only until the vault is locked or the page is closed.
+- The passphrase cannot be reset: forgetting it means the encrypted local data cannot be recovered. Export data before deleting the vault if you need a copy.
+- This is browser-side protection for a demo. It does not protect an unlocked session from malicious same-origin JavaScript/XSS or replace a server-side account and health-data backend. Device selections and permissions are local demo state; no provider API sync occurs. Use HTTPS and a strong, unique passphrase.
+- No diagnosis is provided, and the app does not write health data to a blockchain.
 
 ### Body calculator references
 
@@ -48,4 +54,4 @@ The workflow at `.github/workflows/deploy-pages.yml` builds and publishes `dist`
 2. In the repository, open **Settings → Pages** and set **Build and deployment → Source** to **GitHub Actions**.
 3. Push to `main` or run **Deploy to GitHub Pages** from the Actions tab. GitHub displays the published URL in the completed workflow run and under **Settings → Pages**.
 
-Vercel and GitHub Pages can both deploy from the same GitHub repository. The project folder currently has no GitHub remote, so the workflow will start publishing after it is pushed to the target repository and Pages is enabled.
+Vercel and GitHub Pages can both deploy from the same GitHub repository. This repository is connected to GitHub; Pages publishing also requires Actions billing to be enabled and the Pages source to be set to GitHub Actions.
