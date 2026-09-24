@@ -15,16 +15,16 @@ Create a production build with `npm run build`. Vercel detects Vite automaticall
 
 This MVP follows the navigation and priorities in [`docs/biosync-wireframe-ui-ux.md`](docs/biosync-wireframe-ui-ux.md) and [`docs/biosync-srs-mvp.md`](docs/biosync-srs-mvp.md):
 
-| Wireframe / SRS capability | App surface | Current MVP behavior |
-|---|---|---|
-| Landing and onboarding (FR-02) | Landing page → four-step SweetAlert flow → Dashboard | Goals, age range, body details, activity level, optional source selection and privacy intro; login/email verification remain backend work (FR-01). |
-| Dashboard and daily metrics (FR-04) | Dashboard | Responsive score, streak, step/calorie/heart cards, activity trend and health snapshot using sample data. |
-| Activity tracking (FR-05) | Activity | Create activities with the start/finish flow, read/filter history, edit activity details, and delete entries. |
-| Health trends and body goals (FR-06) | Health → Body | BMI, Kemenkes adult reference bands, formula-based body-fat estimate, reference-weight range, waist-to-height ratio, and a user-entered target. Includes limitations and a non-diagnostic disclaimer. |
-| Challenges and badges (FR-07) | Challenges | Carousel, join/leave community challenges, create/edit/delete personal challenges and view demo badges. |
-| Device sync (FR-03) | Connected devices | Granular consent dialog and local connected-state demo. Real health-provider OAuth/API sync requires provider credentials and secure server endpoints. |
-| Privacy, export, revoke, delete (FR-09) | Privacy center | Permission controls, JSON export, consent toggle, disconnect and local demo-data deletion. |
-| Optional ownership beta (FR-10) | Privacy center | Explains the optional wallet boundary; no wallet or chain transaction is simulated. |
+| Wireframe / SRS capability              | App surface                                          | Current MVP behavior                                                                                                                                                                                  |
+| --------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Landing and onboarding (FR-02)          | Landing page → four-step SweetAlert flow → Dashboard | Goals, age range, body details, activity level, optional source selection and privacy intro; login/email verification remain backend work (FR-01).                                                    |
+| Dashboard and daily metrics (FR-04)     | Dashboard                                            | Responsive score, streak, step/calorie/heart cards, activity trend and health snapshot using sample data.                                                                                             |
+| Activity tracking (FR-05)               | Activity                                             | Create activities with the start/finish flow, read/filter history, edit activity details, and delete entries.                                                                                         |
+| Health trends and body goals (FR-06)    | Health → Body                                        | BMI, Kemenkes adult reference bands, formula-based body-fat estimate, reference-weight range, waist-to-height ratio, and a user-entered target. Includes limitations and a non-diagnostic disclaimer. |
+| Challenges and badges (FR-07)           | Challenges                                           | Carousel, join/leave community challenges, create/edit/delete personal challenges and view demo badges.                                                                                               |
+| Device sync (FR-03)                     | Connected devices                                    | Granular consent dialog and local connected-state demo. Real health-provider OAuth/API sync requires provider credentials and secure server endpoints.                                                |
+| Privacy, export, revoke, delete (FR-09) | Privacy center                                       | Permission controls, JSON export, consent toggle, disconnect and local demo-data deletion.                                                                                                            |
+| Optional ownership beta (FR-10)         | Privacy center                                       | Explains the optional wallet boundary; no wallet or chain transaction is simulated.                                                                                                                   |
 
 ### Local demo security
 
