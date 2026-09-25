@@ -42,13 +42,13 @@ Dokumen ini menjadi acuan product owner, UI/UX designer, developer, QA, dan stak
 
 ### 2.1 Persona
 
-| Persona | Kebutuhan utama |
-|---|---|
-| Active User | Tracking lari, jalan, gym, target, dan statistik |
-| Wellness User | Tidur, langkah, detak jantung, berat badan, recovery |
-| Coach/Community | Challenge, leaderboard, dan insight yang dibagikan |
-| Data Owner | Kontrol izin, export, revoke, dan delete data |
-| System Admin | Monitoring sistem, user, integrasi, dan moderasi |
+| Persona         | Kebutuhan utama                                      |
+| --------------- | ---------------------------------------------------- |
+| Active User     | Tracking lari, jalan, gym, target, dan statistik     |
+| Wellness User   | Tidur, langkah, detak jantung, berat badan, recovery |
+| Coach/Community | Challenge, leaderboard, dan insight yang dibagikan   |
+| Data Owner      | Kontrol izin, export, revoke, dan delete data        |
+| System Admin    | Monitoring sistem, user, integrasi, dan moderasi     |
 
 ### 2.2 Prinsip produk
 
@@ -67,14 +67,14 @@ Dokumen ini menjadi acuan product owner, UI/UX designer, developer, QA, dan stak
 
 ## 3. Aktor dan hak akses
 
-| Aktor | Hak akses |
-|---|---|
-| Guest | Melihat landing page dan informasi produk |
-| User | Mengelola profil, aktivitas, metrik, challenge, consent, dan data |
-| Coach/Community | Mengelola challenge yang dibuatnya dan melihat data yang dibagikan |
-| Admin | Mengelola user, challenge, integrasi, laporan, dan audit |
-| Device Provider | Mengirim data melalui OAuth/API sesuai izin pengguna |
-| Blockchain Network | Menyimpan transaksi consent/verification tanpa data mentah |
+| Aktor              | Hak akses                                                          |
+| ------------------ | ------------------------------------------------------------------ |
+| Guest              | Melihat landing page dan informasi produk                          |
+| User               | Mengelola profil, aktivitas, metrik, challenge, consent, dan data  |
+| Coach/Community    | Mengelola challenge yang dibuatnya dan melihat data yang dibagikan |
+| Admin              | Mengelola user, challenge, integrasi, laporan, dan audit           |
+| Device Provider    | Mengirim data melalui OAuth/API sesuai izin pengguna               |
+| Blockchain Network | Menyimpan transaksi consent/verification tanpa data mentah         |
 
 ## 4. Kebutuhan fungsional
 
@@ -100,6 +100,8 @@ Dokumen ini menjadi acuan product owner, UI/UX designer, developer, QA, dan stak
 - Sistem harus menampilkan status connected, sync time, error, dan tombol disconnect.
 - Sistem harus mencegah duplikasi aktivitas dari sumber yang sama.
 
+**Cakupan implementasi MVP:** Google Health API (OAuth 2.0, read-only activity/fitness) melalui Vercel Functions, dan sensor BLE standar yang diekspos browser. Token Google disimpan pada cookie HttpOnly terenkripsi; API lain seperti Apple Health memerlukan aplikasi iOS pendamping. API dan sensor proprietary vendor tetap memerlukan akses resmi.
+
 ### FR-04 — Dashboard
 
 - Dashboard menampilkan daily score, streak, langkah, kalori, heart rate, dan ringkasan aktivitas.
@@ -114,6 +116,8 @@ Dokumen ini menjadi acuan product owner, UI/UX designer, developer, QA, dan stak
 - Sistem menampilkan ringkasan serta riwayat aktivitas.
 - Pengguna dapat menyembunyikan rute presisi saat membagikan aktivitas.
 - Pengguna dapat menghapus aktivitas tertentu.
+
+**Cakupan implementasi MVP:** Running, walking, cycling, dan hiking merekam koordinat via Geolocation API setelah izin eksplisit. Rute tersimpan terenkripsi di brankas lokal serta ditampilkan sebagai polyline Leaflet/OpenStreetMap dengan atribusi. Nilai jarak berasal dari titik GPS yang diterima; tanpa izin atau sinyal GPS, aktivitas tetap dapat disimpan tanpa rute.
 
 ### FR-06 — Health metrics
 
@@ -161,16 +165,16 @@ Dokumen ini menjadi acuan product owner, UI/UX designer, developer, QA, dan stak
 
 ## 5. Kebutuhan nonfungsional
 
-| ID | Kebutuhan | Target MVP |
-|---|---|---|
-| NFR-01 | Performance | LCP halaman utama ≤ 2,5 detik pada koneksi 4G |
-| NFR-02 | Availability | Target layanan 99,5% per bulan |
-| NFR-03 | Security | TLS, password hashing kuat, encrypted secrets, RBAC, audit log |
-| NFR-04 | Privacy | Consent granular, export, revoke, delete, minimisasi data |
-| NFR-05 | Accessibility | Keyboard support, kontras memadai, label screen reader |
-| NFR-06 | Responsive | 360 px mobile sampai desktop 1440 px |
-| NFR-07 | Scalability | API stateless dan background job untuk sinkronisasi |
-| NFR-08 | Observability | Error tracking, sync log, health check, dan alert |
+| ID     | Kebutuhan     | Target MVP                                                     |
+| ------ | ------------- | -------------------------------------------------------------- |
+| NFR-01 | Performance   | LCP halaman utama ≤ 2,5 detik pada koneksi 4G                  |
+| NFR-02 | Availability  | Target layanan 99,5% per bulan                                 |
+| NFR-03 | Security      | TLS, password hashing kuat, encrypted secrets, RBAC, audit log |
+| NFR-04 | Privacy       | Consent granular, export, revoke, delete, minimisasi data      |
+| NFR-05 | Accessibility | Keyboard support, kontras memadai, label screen reader         |
+| NFR-06 | Responsive    | 360 px mobile sampai desktop 1440 px                           |
+| NFR-07 | Scalability   | API stateless dan background job untuk sinkronisasi            |
+| NFR-08 | Observability | Error tracking, sync log, health check, dan alert              |
 
 ## 6. Arsitektur tingkat tinggi
 
@@ -194,19 +198,19 @@ Aturan: semua tabel data sensitif memiliki `user_id`, timestamp, sumber data, st
 
 ## 8. API minimum
 
-| Method | Endpoint | Fungsi |
-|---|---|---|
-| POST | `/api/v1/auth/register` | Registrasi |
-| POST | `/api/v1/auth/login` | Login |
-| GET | `/api/v1/dashboard` | Ringkasan dashboard |
-| GET/POST | `/api/v1/activities` | Riwayat dan pencatatan aktivitas |
-| GET | `/api/v1/health/summary` | Ringkasan metrik kesehatan |
-| GET/POST | `/api/v1/devices` | Connect dan disconnect perangkat |
-| GET/POST | `/api/v1/challenges` | Daftar dan membuat challenge |
-| GET | `/api/v1/privacy/consents` | Melihat izin akses |
-| POST | `/api/v1/privacy/export` | Meminta export data |
-| DELETE | `/api/v1/account` | Penghapusan akun |
-| POST | `/api/v1/web3/verify-consent` | Menulis bukti consent/hash |
+| Method   | Endpoint                      | Fungsi                           |
+| -------- | ----------------------------- | -------------------------------- |
+| POST     | `/api/v1/auth/register`       | Registrasi                       |
+| POST     | `/api/v1/auth/login`          | Login                            |
+| GET      | `/api/v1/dashboard`           | Ringkasan dashboard              |
+| GET/POST | `/api/v1/activities`          | Riwayat dan pencatatan aktivitas |
+| GET      | `/api/v1/health/summary`      | Ringkasan metrik kesehatan       |
+| GET/POST | `/api/v1/devices`             | Connect dan disconnect perangkat |
+| GET/POST | `/api/v1/challenges`          | Daftar dan membuat challenge     |
+| GET      | `/api/v1/privacy/consents`    | Melihat izin akses               |
+| POST     | `/api/v1/privacy/export`      | Meminta export data              |
+| DELETE   | `/api/v1/account`             | Penghapusan akun                 |
+| POST     | `/api/v1/web3/verify-consent` | Menulis bukti consent/hash       |
 
 ## 9. Aturan keamanan dan privasi
 
@@ -250,11 +254,10 @@ Consent center, wallet optional, verification hash, ownership, dan NFT badge ops
 
 ## 12. Risiko dan mitigasi
 
-| Risiko | Mitigasi |
-|---|---|
-| API perangkat berubah | Adapter per provider dan sync retry |
-| Data tidak lengkap | Tampilkan sumber, timestamp, dan empty state |
-| Penyalahgunaan reward | Validasi aktivitas dan rate limit |
-| Kebocoran data | Encryption, RBAC, audit, secret manager, penetration test |
-| Regulasi kesehatan/crypto | Legal review sebelum fitur klinis atau token diluncurkan |
-
+| Risiko                    | Mitigasi                                                  |
+| ------------------------- | --------------------------------------------------------- |
+| API perangkat berubah     | Adapter per provider dan sync retry                       |
+| Data tidak lengkap        | Tampilkan sumber, timestamp, dan empty state              |
+| Penyalahgunaan reward     | Validasi aktivitas dan rate limit                         |
+| Kebocoran data            | Encryption, RBAC, audit, secret manager, penetration test |
+| Regulasi kesehatan/crypto | Legal review sebelum fitur klinis atau token diluncurkan  |

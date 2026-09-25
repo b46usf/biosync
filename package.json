@@ -10,15 +10,18 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
+    "google-auth-library": "^11.1.0",
+    "leaflet": "^1.9.4",
+    "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "lucide-react": "latest",
+    "react-leaflet": "^5.0.0",
+    "recharts": "latest",
     "sweetalert2": "latest",
-    "recharts": "latest"
+    "vite": "latest"
   },
   "devDependencies": {
-    "tailwindcss": "latest",
-    "@tailwindcss/vite": "latest"
+    "@tailwindcss/vite": "latest",
+    "tailwindcss": "latest"
   }
 }

@@ -1,4 +1,12 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Activity,
   ArrowDownRight,
@@ -38,6 +46,8 @@ import {
 } from "lucide-react";
 import Swal from "sweetalert2";
 import BodyGoals from "./BodyGoals.jsx";
+import { BluetoothCard, GoogleHealthCard } from "./IntegrationCards.jsx";
+import useBleSensor from "./useBleSensor.js";
 import {
   createEncryptedVault,
   deleteEncryptedVault,
@@ -63,6 +73,7 @@ const HealthTrendChart = lazy(() =>
     default: module.HealthTrendChart,
   })),
 );
+const ActivityMap = lazy(() => import("./ActivityMap.jsx"));
 
 const navItems = [
   { label: "Home", icon: Home },
@@ -141,21 +152,6 @@ const challenges = [
     icon: Footprints,
   },
 ];
-const devices = [
-  {
-    name: "Google Fit",
-    detail: "Sync langkah & aktivitas",
-    icon: "G",
-    color: "google",
-  },
-  {
-    name: "Apple Health",
-    detail: "Data kesehatan iPhone",
-    icon: "♥",
-    color: "apple",
-  },
-  { name: "Fitbit", detail: "Aktivitas & tidur", icon: "f", color: "fitbit" },
-];
 
 const createDefaultProfile = () => ({
   name: "Alex Morgan",
@@ -178,6 +174,31 @@ function serializeDemoData(data) {
     ...rest,
     activities: activities.map(({ icon, ...activity }) => activity),
   };
+}
+
+function distanceBetween(first, second) {
+  const radians = (degrees) => (degrees * Math.PI) / 180;
+  const latitudeDelta = radians(second.lat - first.lat);
+  const longitudeDelta = radians(second.lng - first.lng);
+  const latitudeOne = radians(first.lat);
+  const latitudeTwo = radians(second.lat);
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(latitudeOne) *
+      Math.cos(latitudeTwo) *
+      Math.sin(longitudeDelta / 2) ** 2;
+  return (
+    6_371_000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
+  );
+}
+
+function calculateRouteDistance(points) {
+  return points
+    .slice(1)
+    .reduce(
+      (meters, point, index) => meters + distanceBetween(points[index], point),
+      0,
+    );
 }
 function summarizeActivities(activities) {
   const parseDuration = (value) => {
@@ -278,12 +299,23 @@ function App() {
   const [profile, setProfile] = useState(createDefaultProfile);
   const [body, setBody] = useState(createDefaultBody);
   const [connections, setConnections] = useState([]);
+  const [googleHealthConnected, setGoogleHealthConnected] = useState(false);
   const [devicePermissions, setDevicePermissions] = useState({});
   const [joined, setJoined] = useState([]);
   const [userChallenges, setUserChallenges] = useState([]);
   const [consent, setConsent] = useState(true);
   const [tracking, setTracking] = useState(false);
+  const [trackingType, setTrackingType] = useState("Run");
   const [elapsed, setElapsed] = useState(0);
+  const [routePoints, setRoutePoints] = useState([]);
+  const [gpsStatus, setGpsStatus] = useState("idle");
+  const routePointsRef = useRef([]);
+  const gpsWatchRef = useRef(null);
+  const bleSensor = useBleSensor();
+  const handleGoogleHealthConnection = useCallback(
+    (connected) => setGoogleHealthConnected(connected),
+    [],
+  );
   const [vaultStatus, setVaultStatus] = useState("checking");
   const [vaultMode, setVaultMode] = useState("setup");
   const [vaultError, setVaultError] = useState("");
@@ -354,6 +386,22 @@ function App() {
     const tick = setInterval(() => setElapsed((n) => n + 1), 1000);
     return () => clearInterval(tick);
   }, [tracking]);
+  useEffect(
+    () => () => {
+      if (gpsWatchRef.current !== null && navigator.geolocation)
+        navigator.geolocation.clearWatch(gpsWatchRef.current);
+    },
+    [],
+  );
+  useEffect(() => {
+    if (
+      vaultStatus === "ready" &&
+      new URLSearchParams(window.location.search).has("googleHealth")
+    ) {
+      setPage("Devices");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [vaultStatus]);
 
   const applyVaultData = (data = {}) => {
     setProfile({ ...createDefaultProfile(), ...(data.profile || {}) });
@@ -406,6 +454,16 @@ function App() {
     }
   };
   const lockVault = async () => {
+    if (tracking) {
+      setPage("Activity");
+      await showModal({
+        title: "Selesaikan aktivitas dulu",
+        text: "Aktivitas GPS yang sedang berjalan belum disimpan. Selesaikan atau simpan aktivitas sebelum mengunci brankas.",
+        icon: "info",
+        confirmButtonText: "Kembali ke aktivitas",
+      });
+      return;
+    }
     if (saveTimer.current) clearTimeout(saveTimer.current);
     await saveQueue.current;
     if (vaultRef.current) {
@@ -453,79 +511,135 @@ function App() {
       },
       buttonsStyling: false,
     });
+  const importGoogleActivities = (incoming) => {
+    setActivityList((current) => {
+      const knownIds = new Set(current.map((activity) => activity.id));
+      const imported = incoming
+        .filter((activity) => !knownIds.has(activity.id))
+        .map((activity) => ({
+          ...activity,
+          icon: Route,
+          tone:
+            activity.type === "Cycle"
+              ? "orange"
+              : activity.type === "Walk"
+                ? "blue"
+                : "mint",
+        }));
+      return [...imported, ...current];
+    });
+  };
 
   const startTracking = async () => {
     if (!tracking) {
-      const result = await ask(
-        "Mulai aktivitas?",
-        "BioSync akan mencatat durasi dan jarak perkiraan aktivitas ini.",
-        "Mulai",
-      );
-      if (result.isConfirmed) {
-        setElapsed(0);
-        setTracking(true);
-        showToast("Aktivitas dimulai", "Semangat bergerak!");
-      }
-    } else {
-      const result = await ask(
-        "Selesaikan aktivitas?",
-        "Aktivitas ini akan disimpan ke riwayatmu.",
-        "Simpan aktivitas",
-      );
-      if (result.isConfirmed) {
-        setTracking(false);
-        setActivityList((old) => [
-          {
-            id: crypto.randomUUID(),
-            type: "Run",
-            title: "Aktivitas baru",
-            date: "Baru saja",
-            distance: `${(elapsed / 600).toFixed(2)} km`,
-            time: `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`,
-            pace: "—",
-            icon: Route,
-            tone: "mint",
-          },
-          ...old,
-        ]);
-        setPage("Activity");
-        showToast("Aktivitas tersimpan");
-      }
-    }
-  };
-  const connectDevice = async (device) => {
-    const result = await ask(
-      `Hubungkan ${device.name}?`,
-      "Kamu dapat mengatur izin kategori data dan mencabut akses kapan saja.",
-      "Lihat izin",
-    );
-    if (result.isConfirmed) {
-      const accepted = await showModal({
-        title: "Pilih data yang boleh disinkronkan",
-        html: '<div class="consent-options"><label><input type="checkbox" value="activity" checked> Langkah & aktivitas</label><label><input type="checkbox" value="heart" checked> Detak jantung</label><label><input type="checkbox" value="sleep"> Tidur & recovery</label></div><p class="modal-note">Data kesehatan tetap privat dan dapat dicabut kapan saja.</p>',
+      const result = await showModal({
+        title: "Mulai aktivitas outdoor",
+        html: '<div class="onboarding-fields"><label>Jenis aktivitas<select id="tracking-type"><option value="Run">Running</option><option value="Walk">Walking</option><option value="Cycle">Cycling</option><option value="Hike">Hiking</option><option value="Other">Other</option></select></label><p class="modal-note">BioSync meminta izin lokasi untuk merekam rute GPS di perangkat ini. Rute terenkripsi bersama data demo.</p></div>',
         showCancelButton: true,
-        confirmButtonText: "Izinkan & hubungkan",
+        confirmButtonText: "Izinkan GPS & mulai",
         cancelButtonText: "Batal",
-        customClass: {
-          popup: "biosync-modal",
-          confirmButton: "swal-confirm",
-          cancelButton: "swal-cancel",
-        },
-        buttonsStyling: false,
-        preConfirm: () =>
-          [...Swal.getHtmlContainer().querySelectorAll("input:checked")].map(
-            (input) => input.value,
-          ),
+        preConfirm: () => document.getElementById("tracking-type").value,
       });
-      if (accepted.isConfirmed) {
-        setConnections((old) => [...new Set([...old, device.name])]);
-        setDevicePermissions((old) => ({
-          ...old,
-          [device.name]: accepted.value,
-        }));
-        showToast(`${device.name} terhubung`);
+      if (!result.isConfirmed) return;
+      setTrackingType(result.value);
+      setElapsed(0);
+      routePointsRef.current = [];
+      setRoutePoints([]);
+      setGpsStatus("waiting");
+      setTracking(true);
+      if (!navigator.geolocation) {
+        setGpsStatus("unavailable");
+      } else {
+        gpsWatchRef.current = navigator.geolocation.watchPosition(
+          ({ coords, timestamp }) => {
+            if (coords.accuracy > 100) return;
+            const point = {
+              lat: coords.latitude,
+              lng: coords.longitude,
+              timestamp: new Date(timestamp).toISOString(),
+            };
+            const current = routePointsRef.current;
+            if (current.length) {
+              const previous = current[current.length - 1];
+              const elapsedSincePoint =
+                Date.parse(point.timestamp) - Date.parse(previous.timestamp);
+              if (
+                distanceBetween(previous, point) < 3 ||
+                (elapsedSincePoint < 4000 &&
+                  distanceBetween(previous, point) < 8)
+              )
+                return;
+            }
+            const next = [...current, point].slice(-5000);
+            routePointsRef.current = next;
+            setRoutePoints(next);
+            setGpsStatus("active");
+          },
+          (error) =>
+            setGpsStatus(
+              error.code === error.PERMISSION_DENIED ? "denied" : "unavailable",
+            ),
+          { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 },
+        );
       }
+      showToast(
+        "Aktivitas dimulai",
+        "Berikan izin lokasi agar rute dapat direkam.",
+      );
+      return;
     }
+
+    const result = await ask(
+      "Selesaikan aktivitas?",
+      "Durasi, jarak GPS, dan rute yang terekam akan disimpan ke riwayat terenkripsi.",
+      "Simpan aktivitas",
+    );
+    if (!result.isConfirmed) return;
+    if (gpsWatchRef.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(gpsWatchRef.current);
+      gpsWatchRef.current = null;
+    }
+    const savedRoute =
+      routePointsRef.current.length > 1 ? routePointsRef.current : [];
+    const kilometers = calculateRouteDistance(savedRoute) / 1000;
+    const paceSeconds = kilometers > 0 ? Math.round(elapsed / kilometers) : 0;
+    setTracking(false);
+    setActivityList((old) => [
+      {
+        id: crypto.randomUUID(),
+        type: trackingType,
+        title: `${trackingType} activity`,
+        date: new Date().toLocaleString("id-ID", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }),
+        distance: `${kilometers.toFixed(2)} km`,
+        time: `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`,
+        pace: paceSeconds
+          ? `${Math.floor(paceSeconds / 60)}:${String(paceSeconds % 60).padStart(2, "0")}`
+          : "?",
+        route: savedRoute,
+        source: "GPS",
+        icon: Route,
+        tone:
+          trackingType === "Cycle"
+            ? "orange"
+            : trackingType === "Walk"
+              ? "blue"
+              : "mint",
+      },
+      ...old,
+    ]);
+    routePointsRef.current = [];
+    setRoutePoints([]);
+    setGpsStatus("idle");
+    setPage("Activity");
+    showToast(
+      "Aktivitas tersimpan",
+      savedRoute.length
+        ? `${savedRoute.length} titik rute disimpan terenkripsi.`
+        : "Lokasi GPS tidak merekam titik. Jarak tersimpan 0 km.",
+    );
   };
   const exportData = () => {
     const blob = new Blob(
@@ -555,6 +669,13 @@ function App() {
       "Hapus data",
     );
     if (result.isConfirmed) {
+      if (gpsWatchRef.current !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(gpsWatchRef.current);
+        gpsWatchRef.current = null;
+      }
+      routePointsRef.current = [];
+      setRoutePoints([]);
+      setTracking(false);
       if (saveTimer.current) clearTimeout(saveTimer.current);
       vaultEpoch.current += 1;
       vaultRef.current = null;
@@ -577,7 +698,7 @@ function App() {
   const editActivity = async (activity) => {
     const result = await showModal({
       title: "Edit aktivitas",
-      html: `<div class="onboarding-fields"><label>Nama aktivitas<input id="activity-title" value="${escapeHtml(activity.title)}" maxlength="60"></label><label>Jenis<select id="activity-type"><option ${activity.type === "Run" ? "selected" : ""}>Run</option><option ${activity.type === "Walk" ? "selected" : ""}>Walk</option><option ${activity.type === "Cycle" ? "selected" : ""}>Cycle</option><option ${activity.type === "Gym" ? "selected" : ""}>Gym</option><option ${activity.type === "Yoga" ? "selected" : ""}>Yoga</option></select></label><div><label>Jarak<input id="activity-distance" value="${escapeHtml(activity.distance)}" maxlength="20"></label><label>Durasi<input id="activity-time" value="${escapeHtml(activity.time)}" maxlength="20"></label></div><label>Pace<input id="activity-pace" value="${escapeHtml(activity.pace)}" maxlength="20"></label></div>`,
+      html: `<div class="onboarding-fields"><label>Nama aktivitas<input id="activity-title" value="${escapeHtml(activity.title)}" maxlength="60"></label><label>Jenis<select id="activity-type"><option ${activity.type === "Run" ? "selected" : ""}>Run</option><option ${activity.type === "Walk" ? "selected" : ""}>Walk</option><option ${activity.type === "Cycle" ? "selected" : ""}>Cycle</option><option ${activity.type === "Hike" ? "selected" : ""}>Hike</option><option ${activity.type === "Swim" ? "selected" : ""}>Swim</option><option ${activity.type === "Other" ? "selected" : ""}>Other</option><option ${activity.type === "Gym" ? "selected" : ""}>Gym</option><option ${activity.type === "Yoga" ? "selected" : ""}>Yoga</option></select></label><div><label>Jarak<input id="activity-distance" value="${escapeHtml(activity.distance)}" maxlength="20"></label><label>Durasi<input id="activity-time" value="${escapeHtml(activity.time)}" maxlength="20"></label></div><label>Pace<input id="activity-pace" value="${escapeHtml(activity.pace)}" maxlength="20"></label></div>`,
       showCancelButton: true,
       confirmButtonText: "Simpan",
       cancelButtonText: "Batal",
@@ -738,22 +859,13 @@ function App() {
     const detailsValue = details.isConfirmed
       ? details.value
       : { name: profile.name };
-    const source = await showModal({
-      title: "Connect a health source",
-      html: '<div class="consent-options source-options"><label><input name="source" type="radio" value="Google Fit"> Google Fit</label><label><input name="source" type="radio" value="Apple Health"> Apple Health</label><label><input name="source" type="radio" value="Fitbit"> Fitbit</label><label><input name="source" type="radio" value=""> Skip for now</label></div><p class="modal-note">This demo records your choice only. Live sync requires provider authorization.</p>',
-      showCancelButton: true,
+    await showModal({
+      title: "Connect a device anytime",
+      text: "Google Health API and Bluetooth sensors can be connected from Connected devices after setup. You choose the data permissions before connecting.",
+      icon: "info",
       confirmButtonText: "Continue",
-      cancelButtonText: "Skip for now",
-      customClass: {
-        popup: "biosync-modal",
-        confirmButton: "swal-confirm",
-        cancelButton: "swal-cancel",
-      },
-      buttonsStyling: false,
-      preConfirm: () =>
-        document.querySelector(".source-options input:checked")?.value || "",
+      customClass: { popup: "biosync-modal", confirmButton: "swal-confirm" },
     });
-    const sourceValue = source.isConfirmed ? source.value : "";
     const privacy = await showModal({
       title: "You’re in control",
       text: "Health data categories stay private. You can review permissions, export or delete your data any time.",
@@ -784,13 +896,6 @@ function App() {
         height: Number(detailsValue.height) || old.height,
         weight: Number(detailsValue.weight) || old.weight,
       }));
-      if (sourceValue) {
-        setConnections((old) => [...new Set([...old, sourceValue])]);
-        setDevicePermissions((old) => ({
-          ...old,
-          [sourceValue]: ["activity", "heart"],
-        }));
-      }
       setOnboarded(true);
       setPage("Home");
       showToast("Welcome to BioSync", "Your demo workspace is ready.");
@@ -885,7 +990,11 @@ function App() {
         >
           <Watch size={18} />
           <span>Connected devices</span>
-          <span className="device-count">{connections.length}</span>
+          <span className="device-count">
+            {connections.length +
+              Number(googleHealthConnected) +
+              Number(bleSensor.status === "connected")}
+          </span>
         </button>
         <button
           className={`nav-item ${page === "Privacy" ? "active" : ""}`}
@@ -1003,11 +1112,14 @@ function App() {
           {page === "Activity" && (
             <ActivityPage
               activities={filteredActivities}
+              allActivities={activityList}
               activityType={activityType}
               setActivityType={setActivityType}
               startTracking={startTracking}
               tracking={tracking}
               duration={duration}
+              routePoints={routePoints}
+              gpsStatus={gpsStatus}
               editActivity={editActivity}
               deleteActivity={deleteActivity}
             />
@@ -1048,11 +1160,9 @@ function App() {
           )}
           {page === "Devices" && (
             <DevicesPage
-              connections={connections}
-              devicePermissions={devicePermissions}
-              setDevicePermissions={setDevicePermissions}
-              connectDevice={connectDevice}
-              setConnections={setConnections}
+              bleSensor={bleSensor}
+              importGoogleActivities={importGoogleActivities}
+              onGoogleHealthConnection={handleGoogleHealthConnection}
               showToast={showToast}
               changePage={changePage}
             />
@@ -1868,6 +1978,9 @@ function DashboardSkeleton() {
 
 function ActivityPage({
   activities,
+  allActivities,
+  routePoints,
+  gpsStatus,
   activityType,
   setActivityType,
   startTracking,
@@ -1927,7 +2040,17 @@ function ActivityPage({
           <p>Your recent movement, all in one place.</p>
         </div>
         <div className="filter-row">
-          {["All", "Run", "Walk", "Cycle", "Gym", "Yoga"].map((t) => (
+          {[
+            "All",
+            "Run",
+            "Walk",
+            "Cycle",
+            "Hike",
+            "Gym",
+            "Yoga",
+            "Swim",
+            "Other",
+          ].map((t) => (
             <button
               className={activityType === t ? "selected" : ""}
               key={t}
@@ -1956,46 +2079,21 @@ function ActivityPage({
           />
         )}
       </div>
-      <div className="map-card">
-        <div className="map-art">
-          <div className="map-road road-one" />
-          <div className="map-road road-two" />
-          <div className="map-road road-three" />
-          <div className="map-route">
-            <span />
-            <i />
-            <b />
-          </div>
-          <div className="map-pin">
-            <Route size={15} />
-          </div>
-        </div>
-        <div className="map-info">
-          <div>
-            <span className="eyebrow">RECENT ROUTE</span>
-            <h3>Morning loop</h3>
-            <p>Route details are kept private by default.</p>
-          </div>
-          <button
-            className="secondary-button"
-            onClick={() =>
-              showModal({
-                title: "Rute disamarkan",
-                text: "Lokasi presisi tidak ditampilkan pada demo ini.",
-                icon: "info",
-                confirmButtonText: "Oke",
-                customClass: {
-                  popup: "biosync-modal",
-                  confirmButton: "swal-confirm",
-                },
-                buttonsStyling: false,
-              })
-            }
-          >
-            Privacy settings <LockKeyhole size={14} />
-          </button>
-        </div>
-      </div>
+      <Suspense
+        fallback={
+          <div
+            className="skeleton activity-map-skeleton"
+            aria-label="Memuat peta rute"
+          />
+        }
+      >
+        <ActivityMap
+          activities={allActivities}
+          livePoints={routePoints}
+          recording={tracking}
+          gpsStatus={gpsStatus}
+        />
+      </Suspense>
     </>
   );
 }
@@ -2321,11 +2419,9 @@ function MyChallenges({ challenges, editChallenge, deleteChallenge }) {
   );
 }
 function DevicesPage({
-  connections,
-  devicePermissions,
-  setDevicePermissions,
-  connectDevice,
-  setConnections,
+  bleSensor,
+  importGoogleActivities,
+  onGoogleHealthConnection,
   showToast,
   changePage,
 }) {
@@ -2334,104 +2430,22 @@ function DevicesPage({
       <PageHeader
         eyebrow="ONE PLACE, YOUR HEALTH"
         title="Connected devices"
-        subtitle="Choose what you sync. You’re always in control."
+        subtitle="Choose your source and stay in control of your health data."
       />
-      <div className="device-status-banner">
-        <div className="sync-status-icon">
-          <Activity size={20} />
-        </div>
-        <div>
-          <b>
-            {connections.length
-              ? "Demo sources selected"
-              : "Choose a health source"}
-          </b>
-          <p>
-            {connections.length
-              ? `${connections.length} source${connections.length === 1 ? "" : "s"} selected on this device`
-              : "Choose a source to preview its local consent settings."}
-          </p>
-        </div>
-        {connections.length > 0 && (
-          <button
-            className="secondary-button"
-            onClick={() => changePage("Privacy")}
-          >
-            Manage permissions <ArrowRight size={14} />
-          </button>
-        )}
-      </div>
-      <div className="section-title-row">
-        <div>
-          <h2>Available integrations</h2>
-          <p>
-            Choose demo sources and review the consent settings saved on this
-            device.
-          </p>
-        </div>
-      </div>
-      <div className="device-list">
-        {devices.map((device) => (
-          <div className="device-card panel" key={device.name}>
-            <div className={`device-logo ${device.color}`}>{device.icon}</div>
-            <div className="device-copy">
-              <b>{device.name}</b>
-              <span>{device.detail}</span>
-            </div>
-            {connections.includes(device.name) ? (
-              <>
-                <span className="connected-label">
-                  <i /> Demo selected
-                </span>
-                <button
-                  className="secondary-button"
-                  onClick={async () => {
-                    const r = await showModal({
-                      title: `Putuskan ${device.name}?`,
-                      text: "Data yang sudah tersimpan tetap tersedia.",
-                      icon: "warning",
-                      showCancelButton: true,
-                      confirmButtonText: "Putuskan",
-                      cancelButtonText: "Batal",
-                      customClass: {
-                        popup: "biosync-modal",
-                        confirmButton: "swal-confirm danger",
-                        cancelButton: "swal-cancel",
-                      },
-                      buttonsStyling: false,
-                    });
-                    if (r.isConfirmed) {
-                      setConnections((current) =>
-                        current.filter((n) => n !== device.name),
-                      );
-                      setDevicePermissions((current) => {
-                        const next = { ...current };
-                        delete next[device.name];
-                        return next;
-                      });
-                      showToast("Koneksi diputus");
-                    }
-                  }}
-                >
-                  Disconnect
-                </button>
-              </>
-            ) : (
-              <button
-                className="secondary-button connect-button"
-                onClick={() => connectDevice(device)}
-              >
-                Connect <ArrowRight size={14} />
-              </button>
-            )}
-          </div>
-        ))}
+      <div className="device-integration-list">
+        <GoogleHealthCard
+          onImport={importGoogleActivities}
+          onConnectionChange={onGoogleHealthConnection}
+          showToast={showToast}
+        />
+        <BluetoothCard sensor={bleSensor} />
       </div>
       <div className="integration-note">
         <ShieldCheck size={17} />
         <span>
-          <b>Your health data stays private.</b> You choose the categories and
-          can revoke access any time.
+          <b>Apple Health membutuhkan aplikasi iOS pendamping.</b> HealthKit
+          tidak bisa diakses langsung dari browser web. BioSync menyimpan data
+          aktivitas yang diimpor di brankas terenkripsi lokal.
         </span>
         <button onClick={() => changePage("Privacy")}>
           Privacy settings <ArrowRight size={13} />
@@ -2442,31 +2456,31 @@ function DevicesPage({
           <div className="coming-icon">
             <Watch size={19} />
           </div>
-          <span className="eyebrow">COMING SOON</span>
-          <h3>More ways to sync</h3>
+          <span className="eyebrow">DEVICE SUPPORT</span>
+          <h3>Dukungan bergantung pada protokol perangkat</h3>
           <p>
-            Samsung Health, Garmin and Health Connect integrations are planned
-            for the next release.
+            Sensor BLE standar dapat mengirim detak jantung atau cadence.
+            Garmin, Samsung Health, dan perangkat lain memerlukan API resmi atau
+            aplikasi pendamping.
           </p>
         </div>
         <div className="coming-brands">
-          <span>GARMIN</span>
+          <span>BLE GATT</span>
           <span>
-            SAMSUNG
+            GOOGLE
             <br />
             HEALTH
           </span>
           <span>
-            HEALTH
+            IOS
             <br />
-            CONNECT
+            HEALTHKIT
           </span>
         </div>
       </div>
     </>
   );
 }
-
 function PrivacyPage({
   consent,
   setConsent,
