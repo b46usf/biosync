@@ -30,6 +30,7 @@ import {
   Home,
   LockKeyhole,
   LogOut,
+  LogIn,
   Menu,
   Moon,
   MoreHorizontal,
@@ -42,6 +43,7 @@ import {
   Crown,
   Target,
   TrendingUp,
+  UserRoundPlus,
   Watch,
   Waves,
   X,
@@ -50,6 +52,15 @@ import {
 import Swal from "sweetalert2";
 import BodyGoals from "./BodyGoals.jsx";
 import { BluetoothCard, GoogleHealthCard } from "./IntegrationCards.jsx";
+import {
+  createLocalAccount,
+  deleteLocalAccount,
+  hasLocalAccount,
+  normalizeUsername,
+  readLocalAccount,
+  validateUsername,
+  verifyLocalAccount,
+} from "./localAuth.js";
 import useBleSensor from "./useBleSensor.js";
 import {
   createEncryptedVault,
@@ -292,6 +303,10 @@ function showModal(options) {
 
 function App() {
   const [page, setPage] = useState("Home");
+  const [authMode, setAuthMode] = useState("landing");
+  const [authError, setAuthError] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [accountExists, setAccountExists] = useState(false);
   const [onboarded, setOnboarded] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const [range, setRange] = useState("Minggu ini");
@@ -316,7 +331,6 @@ function App() {
   const gpsWatchRef = useRef(null);
   const bleSensor = useBleSensor();
   const [vaultStatus, setVaultStatus] = useState("checking");
-  const [vaultMode, setVaultMode] = useState("setup");
   const [vaultError, setVaultError] = useState("");
   const vaultRef = useRef(null);
   const vaultEpoch = useRef(0);
@@ -342,9 +356,7 @@ function App() {
   }, []);
   useEffect(() => {
     try {
-      setVaultMode(
-        hasEncryptedVault() ? "unlock" : hasLegacyState() ? "migrate" : "setup",
-      );
+      setAccountExists(hasLocalAccount());
       setVaultStatus(hasEncryptedVault() ? "locked" : "access");
     } catch {
       setVaultStatus("unavailable");
@@ -431,28 +443,65 @@ function App() {
     );
     setOnboarded(Boolean(data.onboarded));
   };
-  const openVault = async (password) => {
-    setVaultError("");
+  const authenticate = async ({ username, password, displayName }) => {
+    setAuthError("");
+    setAuthBusy(true);
+    const normalized = normalizeUsername(username);
     try {
+      if (!validateUsername(normalized)) throw new Error("USERNAME_INVALID");
+
       let data;
-      if (vaultMode === "unlock") {
+      let keys;
+      const account = readLocalAccount();
+
+      if (authMode === "register") {
+        if (account) throw new Error("ACCOUNT_EXISTS");
+        if (hasEncryptedVault()) throw new Error("VAULT_EXISTS");
+
+        data = hasLegacyState() ? readLegacyState() : {};
+        data.profile = {
+          ...createDefaultProfile(),
+          ...(data.profile || {}),
+          name: displayName.trim() || normalized,
+        };
+        keys = await createEncryptedVault(password, data);
+        await createLocalAccount(normalized, password);
+      } else {
+        if (account && !(await verifyLocalAccount(normalized, password)))
+          throw new Error("AUTH");
+        if (!account && !hasEncryptedVault()) throw new Error("NO_ACCOUNT");
+
         const result = await unlockEncryptedVault(password);
         data = result.data;
-        vaultRef.current = result.keys;
-      } else {
-        data = vaultMode === "migrate" ? readLegacyState() : {};
-        vaultRef.current = await createEncryptedVault(password, data);
+        keys = result.keys;
+
+        // Bind older vault-only users to a local username during their first login.
+        if (!account) await createLocalAccount(normalized, password);
       }
+
+      vaultRef.current = keys;
       vaultEpoch.current += 1;
       applyVaultData(data);
+      setAccountExists(true);
       setVaultStatus("ready");
+      setAuthMode("app");
     } catch (error) {
       vaultRef.current = null;
-      setVaultError(
-        error?.message === "AUTH"
-          ? "Kata sandi salah atau data terenkripsi berubah."
-          : "Tidak dapat membuka penyimpanan. Coba lagi atau hapus data demo melalui pengaturan browser.",
+      setAuthError(
+        error?.message === "USERNAME_INVALID"
+          ? "Username 3–24 karakter: huruf kecil, angka, titik, garis bawah, atau tanda hubung."
+          : error?.message === "ACCOUNT_EXISTS"
+            ? "Akun lokal sudah terdaftar. Silakan masuk."
+            : error?.message === "VAULT_EXISTS"
+              ? "Brankas lama terdeteksi. Masuk dengan kata sandi lama untuk menghubungkan username."
+              : error?.message === "NO_ACCOUNT"
+                ? "Akun belum terdaftar di browser ini. Pilih Register member untuk membuat akun."
+                : error?.message === "AUTH"
+                  ? "Username atau password tidak cocok."
+                  : "Tidak dapat membuka akun lokal ini. Periksa browser dan coba lagi.",
       );
+    } finally {
+      setAuthBusy(false);
     }
   };
   const lockVault = async () => {
@@ -473,8 +522,9 @@ function App() {
     }
     vaultEpoch.current += 1;
     vaultRef.current = null;
-    setVaultMode("unlock");
     setVaultStatus("locked");
+    setAuthError("");
+    setAuthMode("login");
     setPage("Home");
   };
 
@@ -682,7 +732,9 @@ function App() {
       vaultEpoch.current += 1;
       vaultRef.current = null;
       deleteEncryptedVault();
-      setVaultMode("setup");
+      deleteLocalAccount();
+      setAccountExists(false);
+      setAuthMode("landing");
       setVaultStatus("access");
       setProfile(createDefaultProfile());
       setBody(createDefaultBody());
@@ -864,7 +916,7 @@ function App() {
       : { name: profile.name };
     await showModal({
       title: "Connect a device anytime",
-      text: "Google Health API and Bluetooth sensors can be connected from Connected devices after setup. You choose the data permissions before connecting.",
+      text: "Sensor Bluetooth LE dapat dihubungkan dari Connected devices. Koneksi akun Google Health tersedia di Personal Space sebagai fitur subscription.",
       icon: "info",
       confirmButtonText: "Continue",
       customClass: { popup: "biosync-modal", confirmButton: "swal-confirm" },
@@ -922,6 +974,39 @@ function App() {
   };
   const duration = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
 
+  if (authMode === "landing")
+    return (
+      <Landing
+        onLogin={() => {
+          setAuthError("");
+          setAuthMode("login");
+        }}
+        onRegister={() => {
+          setAuthError("");
+          setAuthMode("register");
+        }}
+      />
+    );
+
+  if (authMode === "login" || authMode === "register")
+    return (
+      <AuthPage
+        mode={authMode}
+        error={authError}
+        busy={authBusy}
+        hasAccount={accountExists}
+        onSubmit={authenticate}
+        onModeChange={(mode) => {
+          setAuthError("");
+          setAuthMode(mode);
+        }}
+        onBack={() => {
+          setAuthError("");
+          setAuthMode("landing");
+        }}
+      />
+    );
+
   if (vaultStatus === "checking")
     return <div className="vault-checking">Membuka brankas BioSync…</div>;
   if (vaultStatus === "unavailable")
@@ -932,13 +1017,22 @@ function App() {
     );
   if (vaultStatus !== "ready")
     return (
-      <VaultAccess mode={vaultMode} error={vaultError} onSubmit={openVault} />
+      <AuthPage
+        mode="login"
+        error={authError || vaultError}
+        busy={authBusy}
+        hasAccount={accountExists}
+        onSubmit={authenticate}
+        onModeChange={setAuthMode}
+        onBack={() => setAuthMode("landing")}
+      />
     );
   if (!onboarded)
     return (
       <Landing
+        onboarding
         onStart={beginOnboarding}
-        onDemo={() => {
+        onContinueDemo={() => {
           setOnboarded(true);
           setPage("Home");
         }}
@@ -1236,98 +1330,161 @@ function App() {
   );
 }
 
-function VaultAccess({ mode, error, onSubmit }) {
+function AuthPage({
+  mode,
+  error,
+  busy,
+  hasAccount,
+  onSubmit,
+  onModeChange,
+  onBack,
+}) {
+  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
-  const [busy, setBusy] = useState(false);
-  const setup = mode !== "unlock";
-  const migrate = mode === "migrate";
+  const registering = mode === "register";
+  const passwordsMatch = !registering || password === confirmation;
+
   const submit = async (event) => {
     event.preventDefault();
-    if (password.length < 8 || (setup && password !== confirmation)) return;
-    setBusy(true);
-    await onSubmit(password);
-    setPassword("");
-    setConfirmation("");
-    setBusy(false);
+    if (!validateUsername(username) || password.length < 8 || !passwordsMatch)
+      return;
+    await onSubmit({ username, displayName, password });
   };
+
   return (
-    <main className="vault-screen">
-      <section className="vault-card">
-        <div className="vault-mark">
-          <ShieldCheck size={24} />
+    <main className="auth-screen">
+      <button className="auth-back" onClick={onBack}>
+        <ChevronLeft size={17} /> Kembali
+      </button>
+      <section className="auth-card">
+        <div className="auth-mark">
+          <Activity size={21} />
         </div>
-        <span className="eyebrow">BIOSYNC · DEMO USER</span>
-        <h1>{setup ? "Buat brankas data" : "Buka brankas data"}</h1>
-        <p>
-          {migrate
-            ? "Data demo lama akan dienkripsi di perangkat ini sebelum dibuka."
-            : setup
-              ? "Buat kata sandi lokal untuk mengenkripsi data demo di browser ini."
-              : "Masukkan kata sandi untuk membuka data terenkripsi di perangkat ini."}
+        <span className="eyebrow">BIOSYNC · PERSONAL SPACE</span>
+        <h1>{registering ? "Daftar member" : "Selamat datang kembali"}</h1>
+        <p className="auth-intro">
+          {registering
+            ? "Buat akun demo untuk menyimpan progres kesehatanmu."
+            : "Masuk untuk membuka workspace dan data terenkripsi di perangkat ini."}
         </p>
-        <form onSubmit={submit}>
+        <form className="auth-form" onSubmit={submit}>
           <label>
-            Kata sandi
+            Username
+            <input
+              autoComplete="username"
+              autoCapitalize="none"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              minLength={3}
+              maxLength={24}
+              placeholder="nama.pengguna"
+              required
+            />
+            {registering && (
+              <small>3–24 karakter: huruf, angka, titik, _ atau -.</small>
+            )}
+          </label>
+          {registering && (
+            <label>
+              Nama tampilan
+              <input
+                autoComplete="name"
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                maxLength={50}
+                placeholder="Nama kamu"
+              />
+            </label>
+          )}
+          <label>
+            Password
             <input
               type="password"
-              autoComplete={setup ? "new-password" : "current-password"}
+              autoComplete={registering ? "new-password" : "current-password"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               minLength={8}
+              placeholder="Minimal 8 karakter"
               required
-              autoFocus
             />
           </label>
-          {setup && (
+          {registering && (
             <label>
-              Ulangi kata sandi
+              Ulangi password
               <input
                 type="password"
                 autoComplete="new-password"
                 value={confirmation}
                 onChange={(event) => setConfirmation(event.target.value)}
                 minLength={8}
+                placeholder="Ketik ulang password"
                 required
               />
+              {!passwordsMatch && confirmation && (
+                <small className="auth-field-error">
+                  Password belum cocok.
+                </small>
+              )}
             </label>
           )}
           {error && (
-            <div className="vault-error" role="alert">
+            <div className="auth-error" role="alert">
               {error}
             </div>
           )}
-          {setup && password.length > 0 && password.length < 8 && (
-            <div className="vault-hint">Gunakan minimal 8 karakter.</div>
-          )}
-          {setup && confirmation.length > 0 && password !== confirmation && (
-            <div className="vault-hint">Konfirmasi kata sandi belum cocok.</div>
-          )}
           <button
-            className="primary-button vault-submit"
+            className="primary-button auth-submit"
             disabled={
               busy ||
+              (registering && hasAccount) ||
+              !validateUsername(username) ||
               password.length < 8 ||
-              (setup && password !== confirmation)
+              !passwordsMatch
             }
           >
-            {busy ? "Memproses…" : setup ? "Buat & lanjutkan" : "Buka BioSync"}
+            {busy ? (
+              "Memproses…"
+            ) : registering ? (
+              <><UserRoundPlus size={16} /> Daftar member</>
+            ) : (
+              <><LogIn size={16} /> Masuk</>
+            )}
           </button>
         </form>
-        <div className="vault-crypto">
-          <LockKeyhole size={14} />
-          <span>Enkripsi AES-256-GCM · autentikasi HMAC-SHA-256</span>
+        <div className="auth-switch">
+          {registering ? "Sudah punya akun?" : "Belum menjadi member?"}{" "}
+          <button
+            onClick={() => onModeChange(registering ? "login" : "register")}
+          >
+            {registering ? "Masuk" : "Register member"}
+          </button>
         </div>
-        <small>
-          Kata sandi tidak disimpan. Jika terlupa, data lokal tidak dapat
-          dipulihkan.
-        </small>
+        <div className="auth-security">
+          <ShieldCheck size={15} />
+          <span>
+            Akun demo tersimpan di browser ini. Password dipakai untuk membuka
+            brankas AES-256-GCM dan tidak dikirim ke server.
+          </span>
+        </div>
+        {hasAccount && registering && (
+          <p className="auth-account-note">
+            Akun lokal sudah tersedia di browser ini. Masuk untuk melanjutkan.
+          </p>
+        )}
       </section>
     </main>
   );
 }
 
-function Landing({ onStart, onDemo }) {
+function Landing({
+  onStart,
+  onLogin,
+  onRegister,
+  onContinueDemo,
+  onboarding = false,
+}) {
   const [feature, setFeature] = useState(0);
   const items = [
     {
@@ -1362,8 +1519,11 @@ function Landing({ onStart, onDemo }) {
           <a href="#features">Features</a>
           <a href="#privacy">Your privacy</a>
         </nav>
-        <button className="landing-signin" onClick={onDemo}>
-          Explore demo <ArrowRight size={15} />
+        <button
+          className="landing-signin"
+          onClick={onboarding ? onContinueDemo : onLogin}
+        >
+          {onboarding ? "Lewati setup" : "Masuk"} <ArrowRight size={15} />
         </button>
       </header>
       <main className="landing-main">
@@ -1384,12 +1544,21 @@ function Landing({ onStart, onDemo }) {
               with your health data always in your hands.
             </p>
             <div className="landing-actions">
-              <button className="landing-cta" onClick={onStart}>
-                Start tracking <ArrowRight size={16} />
+              <button
+                className="landing-cta"
+                onClick={onboarding ? onStart : onRegister}
+              >
+                {onboarding ? "Lengkapi profil" : "Daftar gratis"} <ArrowRight size={16} />
               </button>
-              <a href="#features">
-                Explore features <ChevronDown size={15} />
-              </a>
+              {onboarding ? (
+                <button className="landing-secondary-action" onClick={onContinueDemo}>
+                  Lewati dulu
+                </button>
+              ) : (
+                <button className="landing-secondary-action" onClick={onLogin}>
+                  Sudah punya akun? Masuk
+                </button>
+              )}
             </div>
             <div className="landing-trust">
               <ShieldCheck size={16} />
@@ -1536,8 +1705,8 @@ function Landing({ onStart, onDemo }) {
               optional, and your core experience works without a wallet.
             </p>
           </div>
-          <button onClick={onStart}>
-            Get started <ArrowRight size={14} />
+          <button onClick={onboarding ? onStart : onRegister}>
+            {onboarding ? "Lengkapi profil" : "Mulai gratis"} <ArrowRight size={14} />
           </button>
         </section>
       </main>

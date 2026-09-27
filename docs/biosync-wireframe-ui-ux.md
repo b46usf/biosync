@@ -14,17 +14,22 @@ Supporting line: **MOVE • SYNC • OWN**
 
 ```mermaid
 flowchart TD
-  A[Landing] --> B[Onboarding]
-  B --> C[Dashboard]
-  C --> D[Activity]
-  C --> E[Health]
-  C --> F[Challenges]
-  C --> G[Profile & Privacy]
-  C --> H[Personal Space · Free]
-  H --> I[Subscription · Plus]
-  I --> J[Google Health OAuth]
-  G --> K[Connected devices · BLE]
-  G --> L[Web3 Ownership]
+  A[Landing] --> B{Member?}
+  B -->|Login| C[Username + Password]
+  B -->|Register| D[Create local member]
+  C --> E[Unlock encrypted vault]
+  D --> F[Onboarding]
+  E --> G[Dashboard]
+  F --> G
+  G --> H[Activity]
+  G --> I[Health]
+  G --> J[Challenges]
+  G --> K[Profile & Privacy]
+  G --> L[Personal Space · Free]
+  L --> M[Subscription · Plus]
+  M --> N[Google Health OAuth]
+  K --> O[Connected devices · BLE]
+  K --> P[Web3 Ownership]
 ```
 
 Mobile bottom navigation: **Home · Activity · Health · Challenges · Profile**.
@@ -44,10 +49,11 @@ Features: Track · Sync · Challenge · Own
 ### B. Onboarding
 
 1. Welcome — logo, tagline, CTA “Get Started”.
-2. Health goals — stamina, weight, sleep, strength, stress.
-3. Profile — age range, height, weight, activity level.
-4. Standard BLE sensor connection is available after onboarding from **Connected devices**. Google Health OAuth is available only under **Personal Space → BioSync Plus**.
-5. Privacy choice — data permission per kategori, “Skip for now”.
+2. Login member dengan username dan password, atau pilih **Register member** jika belum memiliki akun.
+3. Setelah register, isi health goals, nama tampilan, rentang usia, tinggi, berat, dan activity level.
+4. Akun demo bersifat lokal pada browser ini; password membuka brankas terenkripsi dan tidak membuat akun server.
+5. Standard BLE sensor connection is available after onboarding from **Connected devices**. Google Health OAuth is available only under **Personal Space → BioSync Plus**.
+6. Privacy choice — data permission per kategori, “Skip for now”.
 
 ### C. Dashboard / Home
 

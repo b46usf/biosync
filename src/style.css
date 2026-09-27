@@ -2498,9 +2498,11 @@ select:focus-visible {
 
 /* SweetAlert2 dialogs */
 .biosync-modal.swal2-popup {
-  width: min(420px, calc(100vw - 32px));
+  width: min(480px, calc(100vw - 28px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
   border-radius: 17px;
-  padding: 25px 25px 22px;
+  padding: clamp(20px, 4vw, 27px);
   font-family: "DM Sans", sans-serif;
   color: #263b50;
   box-shadow: 0 18px 65px #10273b24;
@@ -2514,6 +2516,9 @@ select:focus-visible {
   padding: 8px 0 0;
 }
 .biosync-modal .swal2-html-container {
+  width: 100%;
+  max-height: min(58dvh, 560px);
+  overflow-y: auto;
   font-size: 11px;
   line-height: 1.6;
   color: #83909e;
@@ -2523,13 +2528,22 @@ select:focus-visible {
   transform: scale(0.78);
   margin: 2px auto 6px;
 }
+.biosync-modal .swal2-actions {
+  display: flex;
+  width: 100%;
+  gap: 9px;
+  margin: 16px 0 0;
+}
 .swal-confirm,
 .swal-cancel {
+  flex: 1 1 0;
+  min-height: 42px;
   border-radius: 8px;
-  padding: 10px 15px;
-  font-size: 10px;
+  padding: 10px 14px;
+  font-size: 12px;
   font-weight: 650;
-  margin: 0 4px;
+  margin: 0;
+  transition: background 0.16s, border-color 0.16s, color 0.16s;
 }
 .swal-confirm {
   border: 1px solid #119c8e;
@@ -2581,6 +2595,40 @@ select:focus-visible {
 }
 .consent-options input {
   accent-color: #14a28f;
+}
+.biosync-modal .onboarding-fields {
+  gap: 12px;
+}
+.biosync-modal .onboarding-fields label {
+  gap: 6px;
+  font-size: 12px;
+}
+.biosync-modal .onboarding-fields input,
+.biosync-modal .onboarding-fields select,
+.biosync-modal .onboarding-fields textarea {
+  height: 44px;
+  border-radius: 9px;
+  padding: 0 12px;
+  font-size: 16px;
+}
+.biosync-modal .consent-options {
+  gap: 7px;
+  padding: 10px;
+}
+.biosync-modal .consent-options label {
+  min-height: 42px;
+  padding: 8px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+.biosync-modal .consent-options input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+.biosync-modal .swal2-validation-message {
+  border-radius: 8px;
+  font-size: 12px;
 }
 .modal-note {
   font-size: 9px;
@@ -3383,6 +3431,157 @@ select:focus-visible {
   }
 }
 
+/* Local member sign-in and registration */
+.auth-screen {
+  position: relative;
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 72px 18px 28px;
+  background:
+    radial-gradient(ellipse at 15% 12%, #dff5f0 0, transparent 36%),
+    radial-gradient(ellipse at 90% 85%, #e8eff9 0, transparent 34%),
+    #f6f8fb;
+}
+.auth-back {
+  position: absolute;
+  top: 22px;
+  left: max(22px, calc((100vw - 1060px) / 2));
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 40px;
+  border: 0;
+  padding: 8px 10px;
+  color: #6e7f90;
+  background: transparent;
+  font-size: 13px;
+}
+.auth-card {
+  width: min(100%, 470px);
+  border: 1px solid #e8edf1;
+  border-radius: 20px;
+  padding: clamp(23px, 5vw, 38px);
+  background: #fff;
+  box-shadow: 0 20px 65px #132d4510;
+}
+.auth-mark {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 18px;
+  place-items: center;
+  border-radius: 14px;
+  color: #28dfc4;
+  background: #092039;
+}
+.auth-card h1 {
+  margin: 8px 0 5px;
+  color: #142b41;
+  font: 750 25px/1.25 Manrope, sans-serif;
+  letter-spacing: -0.7px;
+}
+.auth-intro {
+  margin: 0 0 22px;
+  color: #7c8a98;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+.auth-form label {
+  display: grid;
+  gap: 7px;
+  color: #42576b;
+  font-size: 12px;
+  font-weight: 650;
+}
+.auth-form input {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #dfe6eb;
+  border-radius: 10px;
+  padding: 0 13px;
+  color: #1d344a;
+  background: #fff;
+  font-size: 16px;
+  font-weight: 400;
+  transition: border-color 0.16s, box-shadow 0.16s;
+}
+.auth-form input::placeholder {
+  color: #a5b0ba;
+}
+.auth-form input:focus {
+  border-color: #46c7b4;
+  box-shadow: 0 0 0 3px #16c5b21a;
+  outline: 0;
+}
+.auth-form label small {
+  color: #8996a2;
+  font-size: 11px;
+  font-weight: 400;
+}
+.auth-form label .auth-field-error,
+.auth-error {
+  color: #b44953;
+}
+.auth-error {
+  border: 1px solid #f3d3d5;
+  border-radius: 9px;
+  padding: 10px 12px;
+  background: #fff7f7;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.auth-submit {
+  width: 100%;
+  min-height: 48px;
+  justify-content: center;
+  margin-top: 3px;
+  font-size: 13px;
+}
+.auth-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+.auth-switch {
+  margin-top: 19px;
+  color: #7f8c98;
+  font-size: 12px;
+  text-align: center;
+}
+.auth-switch button {
+  border: 0;
+  padding: 4px;
+  color: #118f83;
+  background: transparent;
+  font-weight: 700;
+}
+.auth-security {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 21px;
+  border-radius: 10px;
+  padding: 11px;
+  color: #728391;
+  background: #f4f8f8;
+  font-size: 10px;
+  line-height: 1.55;
+}
+.auth-security svg {
+  flex: 0 0 auto;
+  color: #179d8c;
+}
+.auth-account-note {
+  margin: 12px 0 0;
+  color: #6f8090;
+  font-size: 11px;
+  text-align: center;
+}
+
 /* Marketing entry and onboarding */
 .landing-shell {
   min-height: 100vh;
@@ -3507,14 +3706,21 @@ select:focus-visible {
 .landing-cta:hover {
   background: #087e74;
 }
-.landing-actions > a {
+.landing-actions > a,
+.landing-actions > .landing-secondary-action {
   display: flex;
   align-items: center;
   gap: 5px;
   color: #597084;
+  border: 0;
+  padding: 8px 0;
+  background: transparent;
   text-decoration: none;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
+}
+.landing-actions > .landing-secondary-action:hover {
+  color: #149c8e;
 }
 .landing-trust {
   display: flex;
@@ -4014,8 +4220,10 @@ select:focus-visible {
     font-size: 9px;
   }
   .landing-signin {
-    font-size: 0;
-    padding: 8px;
+    flex: 0 0 auto;
+    gap: 4px;
+    padding: 8px 10px;
+    font-size: 10px;
   }
   .landing-signin svg {
     width: 16px;
@@ -4035,6 +4243,13 @@ select:focus-visible {
   .landing-copy > p {
     font-size: 11px;
     max-width: 400px;
+  }
+  .landing-actions {
+    flex-wrap: wrap;
+    gap: 10px 16px;
+  }
+  .landing-actions > .landing-secondary-action {
+    font-size: 10px;
   }
   .landing-trust {
     margin-top: 20px;
@@ -4120,6 +4335,53 @@ select:focus-visible {
   }
   .landing-footer {
     font-size: 7px;
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-screen {
+    align-items: start;
+    padding: 68px 13px 20px;
+  }
+  .auth-back {
+    top: 13px;
+    left: 12px;
+  }
+  .auth-card {
+    border-radius: 16px;
+    padding: 22px 18px;
+  }
+  .auth-card h1 {
+    font-size: 22px;
+  }
+  .biosync-modal.swal2-popup {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 20px);
+    padding: 20px 16px 17px;
+    border-radius: 15px;
+  }
+  .biosync-modal .swal2-title {
+    font-size: 17px;
+  }
+  .biosync-modal .swal2-html-container {
+    max-height: 52dvh;
+    margin: 8px auto 12px;
+    font-size: 12px;
+  }
+  .biosync-modal .onboarding-fields > div {
+    grid-template-columns: 1fr;
+  }
+  .biosync-modal .consent-options.goal-options {
+    grid-template-columns: 1fr;
+  }
+  .biosync-modal .swal2-actions {
+    gap: 7px;
+    margin-top: 12px;
+  }
+  .biosync-modal .swal2-actions button {
+    min-width: 0;
+    padding-inline: 8px;
+    font-size: 11px;
   }
 }
 

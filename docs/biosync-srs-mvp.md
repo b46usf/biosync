@@ -85,6 +85,8 @@ Dokumen ini menjadi acuan product owner, UI/UX designer, developer, QA, dan stak
 - Sistem harus menyediakan logout dari perangkat aktif.
 - Sistem harus menerapkan rate limit dan autentikasi dua faktor sebagai fitur lanjutan.
 
+**Cakupan implementasi demo:** Landing menampilkan alur Login dan Register member dengan username/password lokal di browser. Password membuka brankas data terenkripsi; tidak ada backend akun, verifikasi email, pemulihan password, atau sinkronisasi lintas perangkat pada MVP demo ini.
+
 ### FR-02 — Onboarding dan profil
 
 - Pengguna dapat memilih tujuan: stamina, berat badan, tidur, strength, atau stress.
