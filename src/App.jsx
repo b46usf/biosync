@@ -21,7 +21,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CircleDollarSign,
   CircleHelp,
   Clock3,
   Flame,
@@ -1104,9 +1103,13 @@ function App() {
           <LockKeyhole size={18} />
           <span>Privacy center</span>
         </button>
-        <button className="nav-item vault-lock-nav" onClick={lockVault}>
-          <ShieldCheck size={18} />
-          <span>Kunci brankas</span>
+        <button
+          className="nav-item vault-lock-nav"
+          onClick={lockVault}
+          aria-label="Keluar dan kunci brankas"
+        >
+          <LogOut size={18} />
+          <span>Keluar</span>
         </button>
         <div className="sidebar-spacer" />
         <div className="sidebar-promo">
@@ -1501,18 +1504,18 @@ function Landing({
   const items = [
     {
       icon: Activity,
-      title: "Track what moves you",
-      copy: "Bring your movement and daily health signals into one calm, clear view.",
+      title: "Pantau setiap gerakmu",
+      copy: "Lihat aktivitas dan sinyal kesehatan harian dalam satu tampilan yang mudah dipahami.",
     },
     {
       icon: Sparkles,
-      title: "Make progress feel good",
-      copy: "Build healthy routines with small goals, streaks and community challenges.",
+      title: "Nikmati setiap kemajuan",
+      copy: "Bangun kebiasaan sehat lewat target kecil, konsistensi, dan tantangan bersama.",
     },
     {
       icon: ShieldCheck,
-      title: "Keep your data yours",
-      copy: "Choose what you share. Export, revoke or delete your data whenever you want.",
+      title: "Data tetap milikmu",
+      copy: "Pilih data yang ingin dibagikan. Ekspor, cabut izin, atau hapus kapan saja.",
     },
   ];
   const ItemIcon = items[feature].icon;
@@ -1528,32 +1531,32 @@ function Landing({
           </span>
         </div>
         <nav>
-          <a href="#features">Features</a>
-          <a href="#privacy">Your privacy</a>
+          <a href="#features">Fitur</a>
+          <a href="#privacy">Privasi</a>
         </nav>
         <button
           className="landing-signin"
           onClick={onboarding ? onContinueDemo : onLogin}
         >
-          {onboarding ? "Lewati setup" : "Masuk"} <ArrowRight size={15} />
+          {onboarding ? "Lewati pengaturan" : "Masuk"} <ArrowRight size={15} />
         </button>
       </header>
       <main className="landing-main">
         <section className="landing-hero">
           <div className="landing-copy">
             <span className="landing-pill">
-              <span /> MOVE · SYNC · OWN
+              <span /> GERAK · SELARAS · MILIKMU
             </span>
             <h1>
-              Your Health.
+              Kesehatanmu.
               <br />
-              <span>Your Data.</span>
+              <span>Datamu.</span>
               <br />
-              Your Control.
+              Kendalimu.
             </h1>
             <p>
-              One clear picture of your wellbeing. Make progress at your pace,
-              with your health data always in your hands.
+              Pahami kondisi tubuhmu dengan lebih mudah. Raih kemajuan sesuai
+              ritmemu, dengan data kesehatan tetap dalam kendalimu.
             </p>
             <div className="landing-actions">
               <button
@@ -1574,8 +1577,8 @@ function Landing({
             </div>
             <div className="landing-trust">
               <ShieldCheck size={16} />
-              <span>Private by design</span>
-              <i /> No diagnosis, just helpful insights
+              <span>Privasi sejak awal</span>
+              <i /> Bukan diagnosis, hanya wawasan yang membantu
             </div>
           </div>
           <div className="landing-preview">
@@ -1583,8 +1586,8 @@ function Landing({
             <div className="preview-card">
               <div className="preview-header">
                 <div>
-                  <span>MONDAY, SEP 21</span>
-                  <b>Your day, in balance.</b>
+                  <span>SENIN, 21 SEP</span>
+                  <b>Hari yang lebih seimbang.</b>
                 </div>
                 <div className="preview-avatar">A</div>
               </div>
@@ -1592,36 +1595,36 @@ function Landing({
                 <div className="preview-score-ring">
                   <div>
                     <b>82</b>
-                    <span>daily score</span>
+                    <span>skor harian</span>
                   </div>
                 </div>
                 <div className="preview-score-copy">
-                  <span>DAILY SCORE</span>
-                  <b>Great momentum!</b>
-                  <small>You’re moving more than 78% of users today.</small>
+                  <span>SKOR HARIAN</span>
+                  <b>Terus bergerak!</b>
+                  <small>Aktivitasmu hari ini melampaui 78% pengguna.</small>
                 </div>
               </div>
               <div className="preview-stats">
                 <div>
                   <Footprints size={15} />
-                  <span>Steps</span>
+                  <span>Langkah</span>
                   <b>8,420</b>
                 </div>
                 <div>
                   <Flame size={15} />
-                  <span>Calories</span>
+                  <span>Kalori</span>
                   <b>640 kcal</b>
                 </div>
                 <div>
                   <Heart size={15} />
-                  <span>Heart</span>
+                  <span>Detak jantung</span>
                   <b>76 bpm</b>
                 </div>
               </div>
               <div className="preview-chart">
                 <div>
-                  <b>Activity overview</b>
-                  <span>THIS WEEK</span>
+                  <b>Ringkasan aktivitas</b>
+                  <span>MINGGU INI</span>
                 </div>
                 <svg viewBox="0 0 360 88" preserveAspectRatio="none">
                   <path
@@ -1634,13 +1637,13 @@ function Landing({
                   />
                 </svg>
                 <div className="preview-days">
-                  <span>MON</span>
-                  <span>TUE</span>
-                  <span>WED</span>
-                  <span>THU</span>
-                  <span>FRI</span>
-                  <span>SAT</span>
-                  <span>SUN</span>
+                  <span>SEN</span>
+                  <span>SEL</span>
+                  <span>RAB</span>
+                  <span>KAM</span>
+                  <span>JUM</span>
+                  <span>SAB</span>
+                  <span>MIN</span>
                 </div>
               </div>
               <div className="preview-bottom">
@@ -1648,8 +1651,8 @@ function Landing({
                   <Flame size={15} />
                 </div>
                 <span>
-                  <b>7 day streak</b>
-                  <small>One more day to your next badge</small>
+                  <b>Konsisten 7 hari</b>
+                  <small>Satu hari lagi menuju lencana berikutnya</small>
                 </span>
                 <ArrowUpRight size={16} />
               </div>
@@ -1659,8 +1662,8 @@ function Landing({
                 <LockKeyhole size={16} />
               </div>
               <span>
-                <b>Your data stays yours</b>
-                <small>Private by design</small>
+                <b>Datamu tetap milikmu</b>
+                <small>Privasi sejak awal</small>
               </span>
               <Check size={15} />
             </div>
@@ -1670,11 +1673,11 @@ function Landing({
         </section>
         <section className="landing-feature-row" id="features">
           <div className="landing-feature-heading">
-            <span className="eyebrow">A HEALTHIER YOU, IN SYNC</span>
+            <span className="eyebrow">LEBIH SEHAT, LEBIH SELARAS</span>
             <h2>
-              Everything that matters.
+              Semua yang kamu butuhkan.
               <br />
-              Nothing you don’t need.
+              Tanpa hal yang tak perlu.
             </h2>
           </div>
           <div className="landing-feature-card">
@@ -1690,7 +1693,7 @@ function Landing({
                 onClick={() =>
                   setFeature((feature + items.length - 1) % items.length)
                 }
-                aria-label="Feature sebelumnya"
+                aria-label="Fitur sebelumnya"
               >
                 <ChevronLeft size={15} />
               </button>
@@ -1699,7 +1702,7 @@ function Landing({
               </span>
               <button
                 onClick={() => setFeature((feature + 1) % items.length)}
-                aria-label="Feature berikutnya"
+                aria-label="Fitur berikutnya"
               >
                 <ChevronRight size={15} />
               </button>
@@ -1711,10 +1714,11 @@ function Landing({
             <Shield size={18} />
           </div>
           <div>
-            <b>Your health is personal. Your data should be too.</b>
+            <b>Kesehatanmu bersifat pribadi. Datamu juga.</b>
             <p>
-              We keep health details off public blockchains. Web3 ownership is
-              optional, and your core experience works without a wallet.
+              Informasi kesehatanmu tidak disimpan di blockchain publik.
+              Kepemilikan Web3 bersifat opsional; BioSync tetap bisa
+              digunakan tanpa dompet digital.
             </p>
           </div>
           <button onClick={onboarding ? onStart : onRegister}>
@@ -1725,7 +1729,7 @@ function Landing({
       <footer className="landing-footer">
         <span>© 2026 BioSync</span>
         <span>
-          <ShieldCheck size={13} /> Your health data stays yours
+          <ShieldCheck size={13} /> Data kesehatan tetap milikmu
         </span>
       </footer>
     </div>
@@ -2734,7 +2738,7 @@ function PersonalSpacePage({
           </div>
           <h3>BioSync Plus</h3>
           <p className="plan-price">
-            Harga segera hadir <small>/ pembayaran belum tersedia</small>
+            Rp 19.000 <small>/ bulan</small>
           </p>
           <p className="plan-description">
             Tambahkan sumber data health untuk melengkapi catatan aktivitasmu.
@@ -2768,8 +2772,8 @@ function PersonalSpacePage({
             </button>
           )}
           <p className="plan-demo-note">
-            Aktivasi ini hanya untuk demo lokal, belum menagihkan biaya atau
-            membuat langganan berbayar.
+            Harga rencana Rp 19.000 per bulan. Saat ini tombol hanya
+            mengaktifkan demo lokal; pembayaran belum tersedia.
           </p>
         </article>
       </div>
@@ -2780,74 +2784,6 @@ function PersonalSpacePage({
           showToast={showToast}
         />
       )}
-
-      <section className="oauth-setup panel">
-        <div className="oauth-setup-heading">
-          <div className="plan-card-icon plus">
-            <CircleDollarSign size={18} />
-          </div>
-          <div>
-            <span className="eyebrow">PANDUAN INTEGRASI</span>
-            <h2>Siapkan Google OAuth di Vercel</h2>
-          </div>
-        </div>
-        <p>
-          Integrasi Google Health hanya muncul di paket Plus. Siapkan kredensial
-          pada proyek Google Cloud dan simpan secret di environment Vercel.
-        </p>
-        <ol>
-          <li>
-            <b>Buat proyek Google Cloud</b> lalu aktifkan Google Health API.
-          </li>
-          <li>
-            <b>Siapkan OAuth consent screen</b>; gunakan tipe External dan
-            tambahkan akun penguji saat status masih Testing.
-          </li>
-          <li>
-            <b>Tambah scope aktivitas read-only</b>:{" "}
-            <code>
-              https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly
-            </code>
-            .
-          </li>
-          <li>
-            <b>Buat OAuth Client ID</b> bertipe Web application. Tambahkan
-            domain aplikasi BioSync dan redirect URI persis:{" "}
-            <code>https://DOMAIN-VERCEL/api/google-health/callback</code>.
-            Google juga meminta redirect URI <code>https://www.google.com</code>{" "}
-            untuk setup Google Health.
-          </li>
-          <li>
-            <b>Di Vercel → Project → Settings → Environment Variables</b>,
-            tambahkan nama dan nilai dari daftar berikut ke Production.
-            Tambahkan ke Preview hanya bila preview akan diuji.
-          </li>
-          <li>
-            <b>Deploy ulang</b> setelah menyimpan environment variables, lalu
-            buka Personal Space, aktifkan Plus demo, dan pilih Hubungkan Google
-            Health.
-          </li>
-        </ol>
-        <div className="oauth-env-list">
-          <code>GOOGLE_HEALTH_CLIENT_ID</code>
-          <code>GOOGLE_HEALTH_CLIENT_SECRET</code>
-          <code>GOOGLE_HEALTH_REDIRECT_URI</code>
-          <code>GOOGLE_HEALTH_COOKIE_SECRET</code>
-        </div>
-        <p className="oauth-secret-note">
-          <LockKeyhole size={14} /> Cookie secret minimal 32 karakter acak.
-          Simpan client secret dan cookie secret sebagai server environment
-          variable tanpa awalan <code>VITE_</code>. Perubahan variable berlaku
-          setelah deployment baru.
-        </p>
-        <a
-          href="https://developers.google.com/health/setup"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Panduan setup Google Health API <ArrowRight size={14} />
-        </a>
-      </section>
     </>
   );
 }

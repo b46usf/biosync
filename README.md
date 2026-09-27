@@ -27,6 +27,8 @@ This MVP follows the navigation and priorities in [`docs/biosync-wireframe-ui-ux
 | Workspace subscription (FR-12)          | Personal Space                                      | Demo user starts on Free; Plus demo unlocks Google Health OAuth. Plan selection is stored in the encrypted local vault; payment is not configured.                                                   |
 | Optional ownership beta (FR-10)         | Privacy center                                       | Explains the optional wallet boundary; no wallet or chain transaction is simulated.                                                                                                                   |
 
+BioSync Plus is positioned at **Rp 19.000 per month** for Indonesia. This is the planned price only; the current demo does not process payments.
+
 ### Local demo accounts and security
 
 - The landing page opens before sign-in. Register creates a browser-local username/password account; login opens the user's encrypted vault. Older vault-only installs can bind a username during their first successful login. Existing plaintext demo data is encrypted during registration.
@@ -50,38 +52,7 @@ The Connected devices page can request a nearby BLE device and subscribe to stan
 
 ### Google Health API OAuth
 
-Google Health OAuth is shown under **Personal Space → BioSync Plus**. Connected devices is reserved for BLE sensor pairing. The server-side OAuth endpoints are Vercel Functions; the read-only activity and fitness scope is requested, and OAuth tokens are sealed with AES-256-GCM in a Secure, HttpOnly, SameSite cookie. Tokens are not stored in localStorage.
-
-#### Google Cloud setup
-
-1. Open [Google Health setup](https://developers.google.com/health/setup) and create or select a Google Cloud project.
-2. Enable Google Health API. Create OAuth credentials for a **Web application**. The current Google Health setup flow also asks for `https://www.google.com` as an authorized redirect URI; add BioSync's callback URI too: `https://<your-vercel-domain>/api/google-health/callback`.
-3. Configure the OAuth consent screen with app name, support email, developer contact, privacy policy, terms, and authorized domain. Set audience to **External** for personal Google accounts.
-4. Under **Data Access**, add only `https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly`. This integration imports exercise records; it does not request write access.
-5. While publishing status is **Testing**, add every Google account you will use under **Test users**. For production/public launch, complete Google's applicable OAuth verification and third-party security review for the requested Health scopes.
-6. Copy the OAuth Client ID and Client Secret. Keep the secret private; never put it in frontend variables or commit it.
-
-#### Vercel environment variables
-
-In **Vercel Dashboard → project → Settings → Environment Variables**, add each variable separately. Select **Production**; select **Preview** only when you intend to test preview deployments. The redirect URI must match the Google OAuth client exactly, including scheme, hostname, path, and trailing-slash behavior:
-
-| Name | Value |
-| --- | --- |
-| `GOOGLE_HEALTH_CLIENT_ID` | OAuth Client ID from Google Cloud |
-| `GOOGLE_HEALTH_CLIENT_SECRET` | OAuth Client Secret from Google Cloud |
-| `GOOGLE_HEALTH_REDIRECT_URI` | `https://<your-vercel-domain>/api/google-health/callback` |
-| `GOOGLE_HEALTH_COOKIE_SECRET` | At least 32 random characters, e.g. `openssl rand -base64 48` |
-
-Do not add a `VITE_` prefix. Vite exposes prefixed variables to the browser bundle, while these credentials must stay on the server. Keep `.env.local` out of Git. After saving variables, trigger a new deployment: environment variable changes do not update an already-built deployment. If you use a custom domain, register that production hostname as the callback; preview deployments need their own registered callback URL if OAuth will be tested there.
-
-#### Verify the integration
-
-1. Open the deployed Vercel URL over HTTPS, unlock the local vault, and navigate to **Personal Space**.
-2. Select **Aktifkan Plus demo**. This only enables the demo feature and does not charge or create a paid subscription.
-3. Select **Hubungkan Google Health**, choose an account listed as a test user, and grant the activity/fitness permission.
-4. Return to Personal Space to sync exercise records or disconnect Google. Imported activity data is encrypted in the local vault.
-
-For local API testing, use `npx vercel dev` so `/api/google-health/*` runs as Vercel Functions. Plain `npm run dev` runs only the Vite frontend. Vercel project variables for Development can be pulled with `vercel env pull`; alternatively use an untracked `.env.local` file.
+Google Health OAuth, activity import, and disconnect are available from Personal Space when Plus demo is enabled. The Vercel endpoints keep OAuth tokens in an encrypted Secure, HttpOnly, SameSite cookie; tokens are not stored in localStorage. Google Cloud and Vercel setup steps are documented in [Panduan Google Health OAuth di Vercel](docs/google-health-oauth-vercel.md).
 
 ### OpenStreetMap and GPS routes
 

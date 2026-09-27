@@ -86,6 +86,7 @@ Dokumen ini menjadi acuan product owner, UI/UX designer, developer, QA, dan stak
 - Sistem harus menerapkan rate limit dan autentikasi dua faktor sebagai fitur lanjutan.
 
 **Cakupan implementasi demo:** Landing menampilkan alur Login dan Register member dengan username/password lokal di browser. Password membuka brankas data terenkripsi; tidak ada backend akun, verifikasi email, pemulihan password, atau sinkronisasi lintas perangkat pada MVP demo ini.
+Logout pada demo menyimpan perubahan terbaru lalu mengunci brankas lokal; logout tidak menghapus akun maupun data.
 
 ### FR-02 — Onboarding dan profil
 
@@ -108,9 +109,11 @@ Dokumen ini menjadi acuan product owner, UI/UX designer, developer, QA, dan stak
 
 - Setiap demo user memiliki workspace Personal Space yang dimulai dengan paket Free.
 - Sistem menampilkan fitur Free dan BioSync Plus, paket aktif, dan fitur yang tersedia pada tiap paket.
+- Harga rencana BioSync Plus adalah Rp 19.000 per bulan untuk pasar Indonesia.
 - Google Health OAuth, sinkronisasi aktivitas, dan pemutusan akun tersedia di bagian BioSync Plus pada Personal Space; menu Connected devices hanya menampilkan koneksi BLE.
 - Aktivasi paket berbayar pada demo tidak boleh ditampilkan seolah-olah pembayaran berhasil. UI harus menjelaskan bahwa pemilihan Plus hanya simulasi sampai payment gateway tersedia.
 - Pilihan paket demo disimpan bersama data terenkripsi lokal.
+- Panduan setup OAuth disimpan di `docs/google-health-oauth-vercel.md`, bukan ditampilkan di halaman Subscription.
 
 ### FR-04 — Dashboard
 

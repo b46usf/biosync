@@ -81,9 +81,10 @@ Latest activity: Morning Run     [View]
 ### F. Personal Space dan subscription
 
 - Workspace **Personal Space** starts on the Free plan and is reachable from the workspace switcher in the sidebar.
-- Show Free and BioSync Plus plan cards, current-plan state, included capabilities, and a clear demo-only activation note while payment is unavailable.
+- Show Free and BioSync Plus plan cards, current-plan state, included capabilities, a Rp 19.000/month planned price, and a clear demo-only activation note while payment is unavailable.
 - BioSync Plus contains Google Health OAuth connect, activity sync, and disconnect. Never place Google account connect in Connected devices.
-- Include setup guidance for Google Cloud OAuth and Vercel environment variables.
+- Keep Google Cloud OAuth and Vercel environment setup in [`google-health-oauth-vercel.md`](google-health-oauth-vercel.md), not inside the Subscription screen.
+- Provide a visible Keluar action in the workspace sidebar; signing out saves and locks the local vault without deleting the account.
 
 ### G. Health
 

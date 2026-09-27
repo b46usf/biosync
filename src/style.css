@@ -4661,8 +4661,7 @@ select:focus-visible {
   color: #149f90;
   background: #e4f7f2;
 }
-.plan-current h2,
-.oauth-setup h2 {
+.plan-current h2 {
   margin: 4px 0;
   color: #20374b;
   font-size: 15px;
@@ -4779,73 +4778,6 @@ select:focus-visible {
   font-size: 9px;
   line-height: 1.5;
   text-align: center;
-}
-.oauth-setup {
-  margin-top: 16px;
-  padding: 20px;
-}
-.oauth-setup-heading {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 9px;
-}
-.oauth-setup-heading h2 {
-  margin: 3px 0 0;
-}
-.oauth-setup > p,
-.oauth-setup li {
-  color: #748493;
-  font-size: 10px;
-  line-height: 1.65;
-}
-.oauth-setup > p {
-  margin: 0 0 12px;
-}
-.oauth-setup ol {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding-left: 20px;
-}
-.oauth-setup li b {
-  color: #344a5e;
-}
-.oauth-setup code {
-  overflow-wrap: anywhere;
-  border-radius: 4px;
-  padding: 2px 4px;
-  color: #168b7f;
-  background: #eff8f6;
-  font-size: 9px;
-}
-.oauth-env-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 13px 0;
-}
-.oauth-secret-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  padding: 10px;
-  border-radius: 9px;
-  background: #f6f8fa;
-}
-.oauth-secret-note svg {
-  flex: 0 0 auto;
-  margin-top: 2px;
-  color: #708294;
-}
-.oauth-setup > a {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: #138f83;
-  font-size: 10px;
-  font-weight: 650;
-  text-decoration: none;
 }
 @media (max-width: 850px) {
   .plan-grid {
