@@ -33,6 +33,7 @@ import {
   Menu,
   Moon,
   MoreHorizontal,
+  PanelLeftOpen,
   Plus,
   Route,
   Settings2,
@@ -308,6 +309,8 @@ function App() {
   const [accountExists, setAccountExists] = useState(false);
   const [onboarded, setOnboarded] = useState(false);
   const [drawer, setDrawer] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const compactNavigation = window.matchMedia("(max-width: 850px)").matches;
   const [range, setRange] = useState("Minggu ini");
   const [activityType, setActivityType] = useState("All");
   const [slide, setSlide] = useState(0);
@@ -1040,7 +1043,10 @@ function App() {
 
   return (
     <div className="app-shell">
-      <aside className={`sidebar ${drawer ? "sidebar-open" : ""}`}>
+      <aside
+        id="biosync-sidebar"
+        className={`sidebar ${drawer ? "sidebar-open" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
+      >
         <div className="brand-row">
           <div className="brand-mark">
             <Activity size={20} strokeWidth={2.7} />
@@ -1050,10 +1056,37 @@ function App() {
           </span>
           <button
             className="icon-button sidebar-close"
-            onClick={() => setDrawer(false)}
-            aria-label="Tutup menu"
+            onClick={() => {
+              if (window.matchMedia("(max-width: 850px)").matches) {
+                setDrawer(false);
+              } else {
+                setSidebarCollapsed((collapsed) => !collapsed);
+              }
+            }}
+            aria-label={
+              compactNavigation
+                ? "Tutup menu"
+                : sidebarCollapsed
+                  ? "Perluas navigasi"
+                  : "Ciutkan navigasi"
+            }
+            aria-controls="biosync-sidebar"
+            aria-expanded={
+              compactNavigation ? drawer : !sidebarCollapsed
+            }
+            title={
+              compactNavigation
+                ? "Tutup menu"
+                : sidebarCollapsed
+                  ? "Perluas navigasi"
+                  : "Ciutkan navigasi"
+            }
           >
-            <X size={19} />
+            {compactNavigation || !sidebarCollapsed ? (
+              <X size={19} />
+            ) : (
+              <PanelLeftOpen size={19} />
+            )}
           </button>
         </div>
         <div className="workspace-label">WORKSPACE</div>
@@ -1061,6 +1094,7 @@ function App() {
           className="workspace-switch"
           onClick={() => changePage("Subscription")}
           aria-label={`Personal space, paket ${subscriptionPlan === "plus" ? "Plus demo" : "Free"}`}
+          title="Paket Personal Space"
         >
           <div className="workspace-avatar">A</div>
           <span>
@@ -1078,6 +1112,9 @@ function App() {
               key={label}
               className={`nav-item ${page === label ? "active" : ""}`}
               onClick={() => changePage(label)}
+              aria-label={label === "Home" ? "Dashboard" : label}
+              aria-current={page === label ? "page" : undefined}
+              title={label === "Home" ? "Dashboard" : label}
             >
               <Icon size={18} />
               <span>{label === "Home" ? "Dashboard" : label}</span>
@@ -1089,6 +1126,8 @@ function App() {
         <button
           className={`nav-item ${page === "Devices" ? "active" : ""}`}
           onClick={() => changePage("Devices")}
+          aria-label="Connected devices"
+          title="Connected devices"
         >
           <Watch size={18} />
           <span>Connected devices</span>
@@ -1099,6 +1138,8 @@ function App() {
         <button
           className={`nav-item ${page === "Privacy" ? "active" : ""}`}
           onClick={() => changePage("Privacy")}
+          aria-label="Privacy center"
+          title="Privacy center"
         >
           <LockKeyhole size={18} />
           <span>Privacy center</span>
@@ -1107,6 +1148,7 @@ function App() {
           className="nav-item vault-lock-nav"
           onClick={lockVault}
           aria-label="Keluar dan kunci brankas"
+          title="Keluar"
         >
           <LogOut size={18} />
           <span>Keluar</span>
@@ -1122,7 +1164,12 @@ function App() {
             Kelola privasi <ArrowRight size={14} />
           </button>
         </div>
-        <button className="profile-mini" onClick={() => changePage("Profile")}>
+        <button
+          className="profile-mini"
+          onClick={() => changePage("Profile")}
+          aria-label={`Profil ${profile.name}`}
+          title={`Profil ${profile.name}`}
+        >
           <div className="avatar">{initials(profile.name)}</div>
           <span>
             <b>{profile.name}</b>
@@ -1139,7 +1186,9 @@ function App() {
         />
       )}
 
-      <main className="main-area">
+      <main
+        className={`main-area ${sidebarCollapsed ? "main-area-collapsed" : ""}`}
+      >
         <header className="topbar">
           <button
             className="icon-button mobile-menu"
