@@ -20,8 +20,11 @@ flowchart TD
   C --> E[Health]
   C --> F[Challenges]
   C --> G[Profile & Privacy]
-  G --> H[Connect Device]
-  G --> I[Web3 Ownership]
+  C --> H[Personal Space · Free]
+  H --> I[Subscription · Plus]
+  I --> J[Google Health OAuth]
+  G --> K[Connected devices · BLE]
+  G --> L[Web3 Ownership]
 ```
 
 Mobile bottom navigation: **Home · Activity · Health · Challenges · Profile**.
@@ -43,7 +46,7 @@ Features: Track · Sync · Challenge · Own
 1. Welcome — logo, tagline, CTA “Get Started”.
 2. Health goals — stamina, weight, sleep, strength, stress.
 3. Profile — age range, height, weight, activity level.
-4. Device connection is available after onboarding from **Connected devices**; users can pair standard BLE sensors or authorize Google Health API.
+4. Standard BLE sensor connection is available after onboarding from **Connected devices**. Google Health OAuth is available only under **Personal Space → BioSync Plus**.
 5. Privacy choice — data permission per kategori, “Skip for now”.
 
 ### C. Dashboard / Home
@@ -66,18 +69,24 @@ Latest activity: Morning Run     [View]
 
 ### E. Connected devices
 
-- Google Health API: OAuth 2.0 consent, read-only exercise import, sync and disconnect.
 - Bluetooth LE: nearby device picker and live standard Heart Rate/Cadence metrics when the sensor exposes those GATT services.
 - Explain secure-context, browser and device-protocol requirements; Apple Health needs an iOS companion app.
 
-### F. Health
+### F. Personal Space dan subscription
+
+- Workspace **Personal Space** starts on the Free plan and is reachable from the workspace switcher in the sidebar.
+- Show Free and BioSync Plus plan cards, current-plan state, included capabilities, and a clear demo-only activation note while payment is unavailable.
+- BioSync Plus contains Google Health OAuth connect, activity sync, and disconnect. Never place Google account connect in Connected devices.
+- Include setup guidance for Google Cloud OAuth and Vercel environment variables.
+
+### G. Health
 
 - Tabs: Overview, Sleep, Heart, Body, Recovery.
 - Trend 7/30/90 hari.
 - Status menggunakan label normal, perhatian, dan perlu konsultasi—bukan diagnosis.
 - Export data JSON/CSV/PDF dan revoke access.
 
-### G. Challenges
+### H. Challenges
 
 ```text
 [Weekly Challenge] 12.4 / 20 km
@@ -87,7 +96,7 @@ Community: 2,430 participants
 Badges: First Move · 10K Steps · 7-Day Streak
 ```
 
-### H. Profile, Privacy, dan Web3
+### I. Profile, Privacy, dan Web3
 
 - Profil, connected devices, notification, language, account security.
 - **Data permissions:** siapa yang dapat mengakses, jenis data, masa berlaku.
@@ -100,11 +109,12 @@ Button primary, secondary, icon button, metric card, chart card, map card, badge
 
 ## 5. Responsive layout
 
-| Viewport        | Layout                                |
-| --------------- | ------------------------------------- |
-| 360–767 px      | 1 kolom, bottom nav, kartu full-width |
-| 768–1199 px     | 2 kolom, sidebar ringkas              |
-| 1200 px ke atas | sidebar tetap, dashboard 3 kolom      |
+| Viewport | Layout |
+| --- | --- |
+| 360–640 px | 1 kolom, bottom nav, sidebar drawer |
+| 641–850 px | 1 kolom, sidebar drawer berlabel |
+| 851–1199 px | konten responsif, sidebar penuh |
+| 1200 px ke atas | sidebar tetap, dashboard 3 kolom |
 
 ## 6. Prioritas MVP
 

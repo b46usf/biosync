@@ -100,7 +100,15 @@ Dokumen ini menjadi acuan product owner, UI/UX designer, developer, QA, dan stak
 - Sistem harus menampilkan status connected, sync time, error, dan tombol disconnect.
 - Sistem harus mencegah duplikasi aktivitas dari sumber yang sama.
 
-**Cakupan implementasi MVP:** Google Health API (OAuth 2.0, read-only activity/fitness) melalui Vercel Functions, dan sensor BLE standar yang diekspos browser. Token Google disimpan pada cookie HttpOnly terenkripsi; API lain seperti Apple Health memerlukan aplikasi iOS pendamping. API dan sensor proprietary vendor tetap memerlukan akses resmi.
+**Cakupan implementasi MVP:** Google Health API (OAuth 2.0, read-only activity/fitness) melalui Vercel Functions tersedia sebagai fitur subscription di workspace Personal Space, dan hanya dapat dibuka dari bagian paket. Connected devices berisi sensor BLE standar yang diekspos browser. Token Google disimpan pada cookie HttpOnly terenkripsi; API lain seperti Apple Health memerlukan aplikasi iOS pendamping. API dan sensor proprietary vendor tetap memerlukan akses resmi.
+
+### FR-12 — Workspace dan paket subscription
+
+- Setiap demo user memiliki workspace Personal Space yang dimulai dengan paket Free.
+- Sistem menampilkan fitur Free dan BioSync Plus, paket aktif, dan fitur yang tersedia pada tiap paket.
+- Google Health OAuth, sinkronisasi aktivitas, dan pemutusan akun tersedia di bagian BioSync Plus pada Personal Space; menu Connected devices hanya menampilkan koneksi BLE.
+- Aktivasi paket berbayar pada demo tidak boleh ditampilkan seolah-olah pembayaran berhasil. UI harus menjelaskan bahwa pemilihan Plus hanya simulasi sampai payment gateway tersedia.
+- Pilihan paket demo disimpan bersama data terenkripsi lokal.
 
 ### FR-04 — Dashboard
 

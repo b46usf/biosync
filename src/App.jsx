@@ -17,9 +17,11 @@ import {
   Bike,
   CalendarDays,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CircleDollarSign,
   CircleHelp,
   Clock3,
   Flame,
@@ -37,6 +39,7 @@ import {
   Shield,
   ShieldCheck,
   Sparkles,
+  Crown,
   Target,
   TrendingUp,
   Watch,
@@ -299,7 +302,7 @@ function App() {
   const [profile, setProfile] = useState(createDefaultProfile);
   const [body, setBody] = useState(createDefaultBody);
   const [connections, setConnections] = useState([]);
-  const [googleHealthConnected, setGoogleHealthConnected] = useState(false);
+  const [subscriptionPlan, setSubscriptionPlan] = useState("free");
   const [devicePermissions, setDevicePermissions] = useState({});
   const [joined, setJoined] = useState([]);
   const [userChallenges, setUserChallenges] = useState([]);
@@ -312,10 +315,6 @@ function App() {
   const routePointsRef = useRef([]);
   const gpsWatchRef = useRef(null);
   const bleSensor = useBleSensor();
-  const handleGoogleHealthConnection = useCallback(
-    (connected) => setGoogleHealthConnected(connected),
-    [],
-  );
   const [vaultStatus, setVaultStatus] = useState("checking");
   const [vaultMode, setVaultMode] = useState("setup");
   const [vaultError, setVaultError] = useState("");
@@ -332,6 +331,7 @@ function App() {
       joined,
       userChallenges,
       consent,
+      subscriptionPlan,
       onboarded,
       activities: activityList,
     });
@@ -379,6 +379,7 @@ function App() {
     userChallenges,
     consent,
     onboarded,
+    subscriptionPlan,
     activityList,
   ]);
   useEffect(() => {
@@ -398,7 +399,7 @@ function App() {
       vaultStatus === "ready" &&
       new URLSearchParams(window.location.search).has("googleHealth")
     ) {
-      setPage("Devices");
+      setPage("Subscription");
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, [vaultStatus]);
@@ -419,6 +420,7 @@ function App() {
       Array.isArray(data.userChallenges) ? data.userChallenges : [],
     );
     setConsent(data.consent ?? true);
+    setSubscriptionPlan(data.subscriptionPlan === "plus" ? "plus" : "free");
     setActivityList(
       Array.isArray(data.activities)
         ? data.activities.map((item, index) => ({
@@ -689,6 +691,7 @@ function App() {
       setJoined([]);
       setUserChallenges([]);
       setConsent(true);
+      setSubscriptionPlan("free");
       setActivityList(createDefaultActivities());
       setOnboarded(false);
       setPage("Home");
@@ -961,14 +964,20 @@ function App() {
           </button>
         </div>
         <div className="workspace-label">WORKSPACE</div>
-        <div className="workspace-switch">
+        <button
+          className="workspace-switch"
+          onClick={() => changePage("Subscription")}
+          aria-label={`Personal space, paket ${subscriptionPlan === "plus" ? "Plus demo" : "Free"}`}
+        >
           <div className="workspace-avatar">A</div>
           <span>
             <b>Personal space</b>
-            <small>Free plan</small>
+            <small>
+              {subscriptionPlan === "plus" ? "Plus · demo" : "Free plan"}
+            </small>
           </span>
           <ChevronDown size={15} />
-        </div>
+        </button>
         <div className="nav-caption">MENU UTAMA</div>
         <nav className="side-nav">
           {navItems.map(({ label, icon: Icon }) => (
@@ -991,9 +1000,7 @@ function App() {
           <Watch size={18} />
           <span>Connected devices</span>
           <span className="device-count">
-            {connections.length +
-              Number(googleHealthConnected) +
-              Number(bleSensor.status === "connected")}
+            {connections.length + Number(bleSensor.status === "connected")}
           </span>
         </button>
         <button
@@ -1159,12 +1166,34 @@ function App() {
             />
           )}
           {page === "Devices" && (
-            <DevicesPage
-              bleSensor={bleSensor}
+            <DevicesPage bleSensor={bleSensor} changePage={changePage} />
+          )}
+          {page === "Subscription" && (
+            <PersonalSpacePage
+              plan={subscriptionPlan}
+              onSelectPlan={async (nextPlan) => {
+                if (nextPlan === "free" && subscriptionPlan === "plus") {
+                  try {
+                    await fetch("/api/google-health/disconnect", {
+                      method: "POST",
+                      credentials: "same-origin",
+                    });
+                  } catch {
+                    // The demo plan can still be selected when the local API is unavailable.
+                  }
+                }
+                if (vaultRef.current) {
+                  if (saveTimer.current) clearTimeout(saveTimer.current);
+                  await saveQueue.current;
+                  await saveEncryptedVault(vaultRef.current, {
+                    ...getDemoState(),
+                    subscriptionPlan: nextPlan,
+                  });
+                }
+                setSubscriptionPlan(nextPlan);
+              }}
               importGoogleActivities={importGoogleActivities}
-              onGoogleHealthConnection={handleGoogleHealthConnection}
               showToast={showToast}
-              changePage={changePage}
             />
           )}
           {page === "Privacy" && (
@@ -2418,38 +2447,248 @@ function MyChallenges({ challenges, editChallenge, deleteChallenge }) {
     </section>
   );
 }
-function DevicesPage({
-  bleSensor,
+function PersonalSpacePage({
+  plan,
+  onSelectPlan,
   importGoogleActivities,
-  onGoogleHealthConnection,
   showToast,
-  changePage,
 }) {
+  const premium = plan === "plus";
+  const [changingPlan, setChangingPlan] = useState(false);
+  const selectPlan = async (nextPlan) => {
+    setChangingPlan(true);
+    try {
+      await onSelectPlan(nextPlan);
+      showToast(
+        nextPlan === "plus" ? "BioSync Plus demo aktif" : "Paket Free aktif",
+        "Perubahan paket tersimpan di brankas lokal.",
+      );
+    } finally {
+      setChangingPlan(false);
+    }
+  };
+  return (
+    <>
+      <PageHeader
+        eyebrow="WORKSPACE PERSONAL"
+        title="Personal Space"
+        subtitle="Kelola paket workspace dan fitur kesehatan yang terhubung."
+      />
+      <section className="plan-current panel">
+        <div className="plan-current-icon">
+          <Activity size={20} />
+        </div>
+        <div>
+          <span className="eyebrow">PAKET SAAT INI</span>
+          <h2>{premium ? "BioSync Plus · demo" : "Personal Space Free"}</h2>
+          <p>
+            {premium
+              ? "Fitur premium demo aktif di perangkat ini."
+              : "Paket gratis untuk mencatat aktivitas, target tubuh, dan progres kesehatan."}
+          </p>
+        </div>
+        <span className="plan-status">
+          <CheckCircle2 size={15} /> Aktif
+        </span>
+      </section>
+
+      <div className="plan-grid">
+        <article
+          className={`plan-card panel ${!premium ? "plan-card-active" : ""}`}
+        >
+          <div className="plan-card-heading">
+            <div className="plan-card-icon free">
+              <Activity size={18} />
+            </div>
+            {!premium && (
+              <span className="plan-current-badge">Paket saat ini</span>
+            )}
+          </div>
+          <h3>Free</h3>
+          <p className="plan-price">
+            Rp 0 <small>/ selamanya</small>
+          </p>
+          <p className="plan-description">
+            Mulai bangun rutinitas sehat dan simpan data secara lokal.
+          </p>
+          <ul>
+            <li>
+              <Check size={15} /> Dashboard, aktivitas, dan peta rute
+            </li>
+            <li>
+              <Check size={15} /> Kalkulator BMI dan body goal
+            </li>
+            <li>
+              <Check size={15} /> Brankas data terenkripsi AES + HMAC
+            </li>
+            <li>
+              <Check size={15} /> Sensor BLE standar
+            </li>
+          </ul>
+          {premium ? (
+            <button
+              className="secondary-button full-width"
+              onClick={() => selectPlan("free")}
+              disabled={changingPlan}
+            >
+              Gunakan Free
+            </button>
+          ) : (
+            <button className="secondary-button full-width" disabled>
+              Paket aktif
+            </button>
+          )}
+        </article>
+
+        <article
+          className={`plan-card panel ${premium ? "plan-card-active plan-card-plus" : ""}`}
+        >
+          <div className="plan-card-heading">
+            <div className="plan-card-icon plus">
+              <Crown size={18} />
+            </div>
+            <span className="plan-coming-badge">
+              <Sparkles size={12} /> Fitur subscription
+            </span>
+          </div>
+          <h3>BioSync Plus</h3>
+          <p className="plan-price">
+            Harga segera hadir <small>/ pembayaran belum tersedia</small>
+          </p>
+          <p className="plan-description">
+            Tambahkan sumber data health untuk melengkapi catatan aktivitasmu.
+          </p>
+          <ul>
+            <li>
+              <Check size={15} /> Semua fitur Free
+            </li>
+            <li>
+              <Check size={15} /> Hubungkan Google Health dengan OAuth
+            </li>
+            <li>
+              <Check size={15} /> Impor aktivitas olahraga ke workspace
+            </li>
+            <li>
+              <ShieldCheck size={15} /> Izin baca aktivitas dan fitness saja
+            </li>
+          </ul>
+          {premium ? (
+            <button className="primary-button full-width" disabled>
+              <Check size={15} /> Plus demo aktif
+            </button>
+          ) : (
+            <button
+              className="primary-button full-width"
+              onClick={() => selectPlan("plus")}
+              disabled={changingPlan}
+            >
+              <Crown size={15} />{" "}
+              {changingPlan ? "Mengaktifkan…" : "Aktifkan Plus demo"}
+            </button>
+          )}
+          <p className="plan-demo-note">
+            Aktivasi ini hanya untuk demo lokal, belum menagihkan biaya atau
+            membuat langganan berbayar.
+          </p>
+        </article>
+      </div>
+
+      {premium && (
+        <GoogleHealthCard
+          onImport={importGoogleActivities}
+          showToast={showToast}
+        />
+      )}
+
+      <section className="oauth-setup panel">
+        <div className="oauth-setup-heading">
+          <div className="plan-card-icon plus">
+            <CircleDollarSign size={18} />
+          </div>
+          <div>
+            <span className="eyebrow">PANDUAN INTEGRASI</span>
+            <h2>Siapkan Google OAuth di Vercel</h2>
+          </div>
+        </div>
+        <p>
+          Integrasi Google Health hanya muncul di paket Plus. Siapkan kredensial
+          pada proyek Google Cloud dan simpan secret di environment Vercel.
+        </p>
+        <ol>
+          <li>
+            <b>Buat proyek Google Cloud</b> lalu aktifkan Google Health API.
+          </li>
+          <li>
+            <b>Siapkan OAuth consent screen</b>; gunakan tipe External dan
+            tambahkan akun penguji saat status masih Testing.
+          </li>
+          <li>
+            <b>Tambah scope aktivitas read-only</b>:{" "}
+            <code>
+              https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly
+            </code>
+            .
+          </li>
+          <li>
+            <b>Buat OAuth Client ID</b> bertipe Web application. Tambahkan
+            domain aplikasi BioSync dan redirect URI persis:{" "}
+            <code>https://DOMAIN-VERCEL/api/google-health/callback</code>.
+            Google juga meminta redirect URI <code>https://www.google.com</code>{" "}
+            untuk setup Google Health.
+          </li>
+          <li>
+            <b>Di Vercel → Project → Settings → Environment Variables</b>,
+            tambahkan nama dan nilai dari daftar berikut ke Production.
+            Tambahkan ke Preview hanya bila preview akan diuji.
+          </li>
+          <li>
+            <b>Deploy ulang</b> setelah menyimpan environment variables, lalu
+            buka Personal Space, aktifkan Plus demo, dan pilih Hubungkan Google
+            Health.
+          </li>
+        </ol>
+        <div className="oauth-env-list">
+          <code>GOOGLE_HEALTH_CLIENT_ID</code>
+          <code>GOOGLE_HEALTH_CLIENT_SECRET</code>
+          <code>GOOGLE_HEALTH_REDIRECT_URI</code>
+          <code>GOOGLE_HEALTH_COOKIE_SECRET</code>
+        </div>
+        <p className="oauth-secret-note">
+          <LockKeyhole size={14} /> Cookie secret minimal 32 karakter acak.
+          Simpan client secret dan cookie secret sebagai server environment
+          variable tanpa awalan <code>VITE_</code>. Perubahan variable berlaku
+          setelah deployment baru.
+        </p>
+        <a
+          href="https://developers.google.com/health/setup"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Panduan setup Google Health API <ArrowRight size={14} />
+        </a>
+      </section>
+    </>
+  );
+}
+
+function DevicesPage({ bleSensor }) {
   return (
     <>
       <PageHeader
         eyebrow="ONE PLACE, YOUR HEALTH"
         title="Connected devices"
-        subtitle="Choose your source and stay in control of your health data."
+        subtitle="Hubungkan sensor BLE standar dan kendalikan akses perangkatmu."
       />
       <div className="device-integration-list">
-        <GoogleHealthCard
-          onImport={importGoogleActivities}
-          onConnectionChange={onGoogleHealthConnection}
-          showToast={showToast}
-        />
         <BluetoothCard sensor={bleSensor} />
       </div>
       <div className="integration-note">
         <ShieldCheck size={17} />
         <span>
-          <b>Apple Health membutuhkan aplikasi iOS pendamping.</b> HealthKit
-          tidak bisa diakses langsung dari browser web. BioSync menyimpan data
-          aktivitas yang diimpor di brankas terenkripsi lokal.
+          <b>Google Health tersedia melalui fitur subscription.</b> Buka
+          Personal Space untuk melihat paket dan menyambungkan akun Google pada
+          paket Plus.
         </span>
-        <button onClick={() => changePage("Privacy")}>
-          Privacy settings <ArrowRight size={13} />
-        </button>
       </div>
       <div className="coming-soon panel">
         <div>
@@ -2459,9 +2698,9 @@ function DevicesPage({
           <span className="eyebrow">DEVICE SUPPORT</span>
           <h3>Dukungan bergantung pada protokol perangkat</h3>
           <p>
-            Sensor BLE standar dapat mengirim detak jantung atau cadence.
-            Garmin, Samsung Health, dan perangkat lain memerlukan API resmi atau
-            aplikasi pendamping.
+            Sensor BLE standar dapat mengirim detak jantung atau cadence. Apple
+            Health memerlukan aplikasi iOS pendamping; Garmin, Samsung Health,
+            dan perangkat lain memerlukan API resmi atau aplikasi pendamping.
           </p>
         </div>
         <div className="coming-brands">
