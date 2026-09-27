@@ -1345,6 +1345,13 @@ function AuthPage({
   const [confirmation, setConfirmation] = useState("");
   const registering = mode === "register";
   const passwordsMatch = !registering || password === confirmation;
+  const submitHint = !validateUsername(username)
+    ? "Username harus 3–24 karakter."
+    : password.length < 8
+      ? "Password minimal 8 karakter."
+      : registering && !passwordsMatch
+        ? "Ulangi password dengan benar."
+        : "";
 
   const submit = async (event) => {
     event.preventDefault();
@@ -1452,6 +1459,11 @@ function AuthPage({
               <><LogIn size={16} /> Masuk</>
             )}
           </button>
+          {submitHint && !hasAccount && (
+            <small className="auth-submit-hint" aria-live="polite">
+              {submitHint}
+            </small>
+          )}
         </form>
         <div className="auth-switch">
           {registering ? "Sudah punya akun?" : "Belum menjadi member?"}{" "}

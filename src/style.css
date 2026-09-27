@@ -3546,6 +3546,13 @@ select:focus-visible {
   cursor: not-allowed;
   opacity: 0.58;
 }
+.auth-submit-hint {
+  display: block;
+  margin-top: -7px;
+  color: #8996a2;
+  font-size: 11px;
+  text-align: center;
+}
 .auth-switch {
   margin-top: 19px;
   color: #7f8c98;
