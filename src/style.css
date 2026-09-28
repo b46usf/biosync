@@ -203,45 +203,6 @@ select:focus-visible {
   flex: 1;
   min-height: 22px;
 }
-.sidebar-promo {
-  position: relative;
-  overflow: hidden;
-  border-radius: 13px;
-  background: #f2faf8;
-  padding: 15px 13px;
-  margin-bottom: 16px;
-}
-.promo-spark {
-  width: 27px;
-  height: 27px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  color: #12a896;
-  background: #dcf5ee;
-  margin-bottom: 10px;
-}
-.sidebar-promo > b {
-  font-size: 11px;
-  color: #20374b;
-}
-.sidebar-promo > p {
-  font-size: 11px;
-  line-height: 1.5;
-  color: #65788a;
-  margin: 6px 0 9px;
-}
-.sidebar-promo button {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  color: #169d91;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 10px;
-  font-weight: 650;
-}
 .profile-mini {
   border: 0;
   border-top: 1px solid #edf0f3;
@@ -304,7 +265,6 @@ select:focus-visible {
   .sidebar.sidebar-collapsed .workspace-switch > svg,
   .sidebar.sidebar-collapsed .nav-caption,
   .sidebar.sidebar-collapsed .nav-item > span:not(.nav-dot):not(.device-count),
-  .sidebar.sidebar-collapsed .sidebar-promo,
   .sidebar.sidebar-collapsed .profile-mini span,
   .sidebar.sidebar-collapsed .profile-mini > svg {
     display: none;
@@ -2869,7 +2829,7 @@ select:focus-visible {
     width: 264px;
     transform: translateX(-105%);
     transition: transform 0.23s ease;
-    padding: 22px 16px 14px;
+    padding: 16px 16px 10px;
     box-shadow: none;
   }
   .sidebar.sidebar-open {
@@ -2878,7 +2838,7 @@ select:focus-visible {
   }
   .brand-row {
     justify-content: flex-start;
-    padding: 0 7px 28px;
+    padding: 0 7px 18px;
     font-size: 20px;
   }
   .sidebar-close {
@@ -2890,7 +2850,6 @@ select:focus-visible {
   .workspace-switch > svg,
   .nav-caption,
   .nav-item span,
-  .sidebar-promo,
   .profile-mini span,
   .profile-mini > svg {
     display: initial;
@@ -2900,13 +2859,21 @@ select:focus-visible {
   }
   .workspace-label {
     display: block;
+    padding-bottom: 6px;
   }
   .workspace-switch {
     justify-content: flex-start;
     padding: 7px 9px;
-    height: 52px;
+    height: 48px;
     border: 1px solid #e9edf1;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
+  }
+  .nav-caption {
+    padding-bottom: 7px;
+  }
+  .side-nav {
+    gap: 3px;
+    margin-bottom: 16px;
   }
   .workspace-switch > svg {
     display: block;
@@ -2915,6 +2882,7 @@ select:focus-visible {
     justify-content: flex-start;
     padding: 0 11px;
     height: 40px;
+    min-height: 40px;
   }
   .nav-item span {
     display: initial;
@@ -2927,12 +2895,12 @@ select:focus-visible {
     display: block;
     margin-left: auto;
   }
-  .sidebar-promo {
-    display: block;
-  }
   .profile-mini {
     justify-content: flex-start;
-    padding: 12px 5px 0;
+    padding: 9px 5px 0;
+  }
+  .sidebar-spacer {
+    min-height: 8px;
   }
   .profile-mini span {
     display: flex;
@@ -3588,6 +3556,31 @@ select:focus-visible {
   font-size: 16px;
   font-weight: 400;
   transition: border-color 0.16s, box-shadow 0.16s;
+}
+.password-field {
+  position: relative;
+  width: 100%;
+}
+.password-field input {
+  padding-right: 49px;
+}
+.password-visibility-toggle {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  transform: translateY(-50%);
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  color: #667b8f;
+  background: transparent;
+}
+.password-visibility-toggle:hover {
+  color: #168f83;
+  background: #eff8f6;
 }
 .auth-form input::placeholder {
   color: #a5b0ba;

@@ -23,6 +23,8 @@ import {
   ChevronRight,
   CircleHelp,
   Clock3,
+  Eye,
+  EyeOff,
   Flame,
   Footprints,
   Heart,
@@ -1154,16 +1156,6 @@ function App() {
           <span>Keluar</span>
         </button>
         <div className="sidebar-spacer" />
-        <div className="sidebar-promo">
-          <div className="promo-spark">
-            <Sparkles size={17} />
-          </div>
-          <b>Your data, your rules.</b>
-          <p>Atur izin dan jaga privasimu tetap dalam kendali.</p>
-          <button onClick={() => changePage("Privacy")}>
-            Kelola privasi <ArrowRight size={14} />
-          </button>
-        </div>
         <button
           className="profile-mini"
           onClick={() => changePage("Profile")}
@@ -1459,27 +1451,24 @@ function AuthPage({
           )}
           <label>
             Password
-            <input
-              type="password"
-              autoComplete={registering ? "new-password" : "current-password"}
+            <PasswordVisibilityField
+              key={`password-${mode}`}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              minLength={8}
+              autoComplete={registering ? "new-password" : "current-password"}
               placeholder="Minimal 8 karakter"
-              required
             />
           </label>
           {registering && (
             <label>
               Ulangi password
-              <input
-                type="password"
-                autoComplete="new-password"
+              <PasswordVisibilityField
+                key={`confirmation-${mode}`}
                 value={confirmation}
                 onChange={(event) => setConfirmation(event.target.value)}
-                minLength={8}
+                autoComplete="new-password"
                 placeholder="Ketik ulang password"
-                required
+                accessibleName="konfirmasi password"
               />
               {!passwordsMatch && confirmation && (
                 <small className="auth-field-error">
@@ -1539,6 +1528,41 @@ function AuthPage({
         )}
       </section>
     </main>
+  );
+}
+
+function PasswordVisibilityField({
+  value,
+  onChange,
+  autoComplete,
+  placeholder,
+  accessibleName = "password",
+}) {
+  const [visible, setVisible] = useState(false);
+  const action = `${visible ? "Sembunyikan" : "Lihat"} ${accessibleName}`;
+
+  return (
+    <div className="password-field">
+      <input
+        type={visible ? "text" : "password"}
+        autoComplete={autoComplete}
+        value={value}
+        onChange={onChange}
+        minLength={8}
+        placeholder={placeholder}
+        required
+      />
+      <button
+        className="password-visibility-toggle"
+        type="button"
+        onClick={() => setVisible((current) => !current)}
+        aria-label={action}
+        aria-pressed={visible}
+        title={action}
+      >
+        {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+      </button>
+    </div>
   );
 }
 
